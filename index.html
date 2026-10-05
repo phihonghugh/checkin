@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f7f7f9">
+<title>夫妻打卡</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#f7f7f9; --card:#ffffff; --line:#ececf0; --txt:#2b2b33; --sub:#8a8a96;
+    --blue:#4a7fd4; --blue-bg:#e8effb; --pink:#e0709c; --pink-bg:#fbe9f1;
+    --green:#3aa273; --gold:#c9962e;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--txt);
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  .wrap{max-width:760px; margin:0 auto; padding:0 10px 90px}
+
+  /* ===== header ===== */
+  header{position:sticky; top:0; z-index:20; background:linear-gradient(var(--bg) 82%,transparent);
+    padding:10px 10px 6px; max-width:760px; margin:0 auto;}
+  .hrow{display:flex; align-items:center; gap:8px}
+  .weekbox{flex:1; display:flex; align-items:center; justify-content:space-between; gap:4px}
+  .navbtn{width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:var(--card);
+    font-size:16px; color:var(--txt); display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none}
+  .navbtn:active{background:#f0f0f3}
+  .weeklabel{text-align:center; line-height:1.15; flex:1; cursor:pointer}
+  .weeklabel .wl1{font-size:15px; font-weight:600}
+  .weeklabel .wl2{font-size:11px; color:var(--sub)}
+  .badge{position:relative; min-width:58px; height:34px; border-radius:10px; border:1px solid var(--line);
+    background:var(--card); font-size:13px; font-weight:600; padding:0 10px; display:flex; align-items:center; justify-content:center;
+    gap:5px; cursor:pointer; user-select:none}
+  .badge.h{color:var(--blue)} .badge.w{color:var(--pink)}
+  .dot{position:absolute; right:-1px; top:-1px; width:10px; height:10px; border-radius:50%; border:2px solid var(--card); background:#c9c9d2}
+  .dot.ok{background:var(--green)} .dot.busy{background:var(--gold)} .dot.err{background:#d4554a}
+
+  /* ===== stats ===== */
+  .stats{display:flex; gap:8px; margin:4px 0 10px}
+  .statcard{flex:1; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:8px 12px}
+  .statcard .st1{font-size:12px; color:var(--sub); display:flex; justify-content:space-between}
+  .statcard .st2{font-size:17px; font-weight:700; margin-top:2px}
+  .bar{height:6px; border-radius:3px; background:#efeff3; margin-top:6px; overflow:hidden}
+  .bar i{display:block; height:100%; border-radius:3px; width:0; transition:width .4s}
+  .bar.hb i{background:var(--blue)} .bar.wb i{background:var(--pink)}
+
+  /* ===== table ===== */
+  .tablecard{background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden}
+  .scroller{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse; width:100%; min-width:470px}
+  th,td{border-bottom:1px solid var(--line); padding:0}
+  thead th{font-size:11px; color:var(--sub); font-weight:500; padding:8px 0 6px; text-align:center; position:sticky; top:0; background:var(--card)}
+  thead th small{display:block; font-size:10px; color:#b5b5bf}
+  thead th.today, td.today{background:#fffbeb}
+  td.name,th.corner{position:sticky; left:0; background:var(--card); z-index:2; text-align:left}
+  th.corner{z-index:3}
+  td.name{padding:0 6px 0 12px; font-size:13px; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis}
+  td.name .em{margin-right:5px}
+  tr:last-child td{border-bottom:none}
+  td.cell{text-align:center; width:44px; height:46px}
+  td.cell .box{display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; border-radius:9px;
+    border:1.5px solid #d9d9e0; font-size:14px; font-weight:700; color:#fff; cursor:pointer; user-select:none; background:#fff}
+  td.cell.husband .box{background:var(--blue); border-color:var(--blue)}
+  td.cell.wife .box{background:var(--pink); border-color:var(--pink)}
+  td.cell.off{color:#d8d8de}
+  td.cell.off .box{border:none; font-size:12px; color:#d8d8de}
+  td.cell.who .box{border-style:dashed; border-color:#c9c9d2; background:#fafafa; color:#b0b0ba; font-size:11px; font-weight:600}
+  .legend{display:flex; gap:14px; padding:8px 14px; font-size:11px; color:var(--sub); background:#fbfbfc; border-top:1px solid var(--line)}
+  .legend b{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px}
+
+  /* ===== fab ===== */
+  .fab{position:fixed; right:16px; bottom:calc(18px + env(safe-area-inset-bottom)); width:46px; height:46px; border-radius:50%;
+    background:var(--card); border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08); display:flex; align-items:center;
+    justify-content:center; font-size:20px; cursor:pointer; z-index:30}
+  .fab:active{transform:scale(.94)}
+
+  /* ===== overlay / sheets ===== */
+  .mask{position:fixed; inset:0; background:rgba(30,30,40,.35); z-index:40; display:none}
+  .mask.show{display:block}
+  .sheet{position:fixed; left:0; right:0; bottom:0; z-index:50; background:var(--card); border-radius:18px 18px 0 0;
+    max-height:86vh; overflow-y:auto; transform:translateY(105%); transition:transform .22s ease; padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .sheet.show{transform:translateY(0)}
+  .sh-head{position:sticky; top:0; background:var(--card); display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px 8px; border-bottom:1px solid var(--line)}
+  .sh-head h3{margin:0; font-size:16px}
+  .sh-x{width:30px; height:30px; border-radius:8px; background:#f2f2f5; border:none; font-size:14px; color:var(--sub)}
+  .sh-body{padding:12px 18px 4px}
+
+  .field{margin-bottom:12px}
+  .field label{display:block; font-size:12px; color:var(--sub); margin-bottom:5px}
+  .field input,.field select{width:100%; height:40px; border:1px solid var(--line); border-radius:10px; padding:0 10px; font-size:14px; background:#fbfbfc; color:var(--txt)}
+  .field input:focus{outline:none; border-color:var(--blue)}
+  .row2{display:flex; gap:10px} .row2 .field{flex:1}
+  .btn{width:100%; height:44px; border:none; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer}
+  .btn.primary{background:var(--blue); color:#fff}
+  .btn.ghost{background:#f2f2f5; color:var(--txt)}
+  .btn.danger{background:#fdeeed; color:#c94c42}
+  .btn:active{opacity:.85}
+  .hint{font-size:12px; color:var(--sub); line-height:1.6; margin:6px 0 0}
+  .hint a{color:var(--blue); text-decoration:none; word-break:break-all}
+  .sep{height:1px; background:var(--line); margin:14px 0}
+  .secttl{font-size:13px; font-weight:700; margin:2px 0 8px}
+
+  /* item editor */
+  .itemrow{display:flex; align-items:center; gap:8px; padding:9px 2px; border-bottom:1px dashed var(--line)}
+  .itemrow .iemoji{width:30px; font-size:18px; text-align:center}
+  .itemrow .iname{flex:1; font-size:14px; min-width:0}
+  .itemrow .iname small{display:block; color:var(--sub); font-size:11px}
+  .itemrow .iact{width:52px; text-align:right}
+  .mini{border:1px solid var(--line); background:#fff; border-radius:8px; font-size:12px; padding:5px 9px; color:var(--txt)}
+  .mini.del{color:#c94c42; border-color:#f2d7d4}
+  .who-chip{font-size:10px; border-radius:6px; padding:2px 6px; font-weight:600}
+  .who-chip.h{background:var(--blue-bg); color:var(--blue)} .who-chip.w{background:var(--pink-bg); color:var(--pink)} .who-chip.b{background:#eaf5ee; color:var(--green)}
+  .daychips{display:flex; gap:5px; flex-wrap:wrap}
+  .daychip{width:40px; height:32px; border-radius:8px; border:1px solid var(--line); background:#fbfbfc; font-size:12px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--sub); user-select:none}
+  .daychip.on{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:600}
+
+  /* fullscreen setup */
+  #setup{position:fixed; inset:0; z-index:60; background:var(--bg); overflow-y:auto; display:none}
+  #setup.show{display:block}
+  .su-card{max-width:430px; margin:34px auto; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:22px 20px}
+  .su-card h1{font-size:20px; margin:0 0 4px; text-align:center}
+  .su-card .sub{text-align:center; color:var(--sub); font-size:13px; margin-bottom:16px}
+  .step{display:flex; gap:10px; margin-bottom:12px}
+  .step .n{flex:none; width:22px; height:22px; border-radius:50%; background:var(--blue); color:#fff; font-size:12px;
+    display:flex; align-items:center; justify-content:center; font-weight:700; margin-top:2px}
+  .step p{margin:0; font-size:13px; line-height:1.65; color:#444450}
+  .idpick{display:flex; gap:10px; margin:6px 0 14px}
+  .idopt{flex:1; height:64px; border:1.5px solid var(--line); border-radius:14px; background:#fbfbfc; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:3px; cursor:pointer; font-weight:600}
+  .idopt.on.h{border-color:var(--blue); background:var(--blue-bg); color:var(--blue)}
+  .idopt.on.w{border-color:var(--pink); background:var(--pink-bg); color:var(--pink)}
+  .idopt span{font-size:20px}
+  .toast{position:fixed; left:50%; bottom:calc(80px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    background:#33333d; color:#fff; font-size:13px; padding:9px 16px; border-radius:20px; z-index:99; display:none; max-width:80vw; text-align:center}
+  .empty-tips{padding:16px; text-align:center; color:var(--sub); font-size:13px; line-height:1.8}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="weekbox">
+      <div class="navbtn" id="prevW">‹</div>
+      <div class="weeklabel" id="weekLabel" title="点击回到本周">
+        <div class="wl1" id="wl1">—</div>
+        <div class="wl2" id="wl2">本周</div>
+      </div>
+      <div class="navbtn" id="nextW">›</div>
+    </div>
+    <div class="badge h" id="meBadge"><span id="meName">老公</span><span style="font-size:10px">▾</span><span class="dot" id="syncDot"></span></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="statcard">
+      <div class="st1"><span id="hNick">老公</span><span id="hPct">0%</span></div>
+      <div class="st2" id="hNum">0/0</div>
+      <div class="bar hb"><i id="hBar"></i></div>
+    </div>
+    <div class="statcard">
+      <div class="st1"><span id="wNick">老婆</span><span id="wPct">0%</span></div>
+      <div class="st2" id="wNum">0/0</div>
+      <div class="bar wb"><i id="wBar"></i></div>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="scroller"><table id="tbl"></table></div>
+    <div class="legend">
+      <span><b style="background:var(--blue)"></b>老公打的卡</span>
+      <span><b style="background:var(--pink)"></b>老婆打的卡</span>
+      <span><b style="background:#fafafa;border:1.5px dashed #c9c9d2;box-sizing:border-box"></b>对方负责</span>
+      <span style="margin-left:auto">点格子打卡</span>
+    </div>
+  </div>
+  <p class="hint" id="localHint" style="display:none">当前为<b>本地试用模式</b>（数据只存在本机）。和另一半同步请点右上角 ⚙ 填入「云同步」配置。</p>
+</div>
+
+<div class="fab" id="fab">⚙</div>
+
+<!-- ===== 设置抽屉 ===== -->
+<div class="mask" id="mask"></div>
+<div class="sheet" id="setSheet">
+  <div class="sh-head"><h3>设置</h3><button class="sh-x" id="setClose">✕</button></div>
+  <div class="sh-body">
+    <div class="secttl">我的身份</div>
+    <div class="row2">
+      <div class="field"><label>我改名（老公昵称）</label><input id="nickH" placeholder="老公"></div>
+      <div class="field"><label>（老婆昵称）</label><input id="nickW" placeholder="老婆"></div>
+    </div>
+    <div class="idpick">
+      <div class="idopt h" data-id="husband"><span>👨</span>这台手机是老公的</div>
+      <div class="idopt w" data-id="wife"><span>👩</span>这台手机是老婆的</div>
+    </div>
+
+    <div class="sep"></div>
+    <div class="secttl">云同步（GitHub Gist）</div>
+    <div class="field"><label>Gist ID</label><input id="gistId" placeholder="gists.github.com/用户名/xxxxxxxx 中的那串字符"></div>
+    <div class="field"><label>Token（只勾 gist 权限）</label><input id="token" type="password" placeholder="ghp_...."></div>
+    <div class="row2">
+      <button class="btn ghost" id="testConn">测试连接</button>
+      <button class="btn primary" id="saveSync">保存并同步</button>
+    </div>
+    <p class="hint" id="syncHint">未配置 = 本地试用模式，数据只在本机。配置方法见说明文档。</p>
+
+    <div class="sep"></div>
+    <div class="secttl">打卡项目 <button class="mini" id="addItem" style="margin-left:8px">＋ 添加项目</button></div>
+    <div id="itemList"></div>
+
+    <div class="sep"></div>
+    <button class="btn danger" id="wipeLocal">清除本机缓存（云端数据不受影响）</button>
+    <p class="hint" style="text-align:center;margin-top:10px">数据保存在你们两人的私密 Gist 里，第三方无法查看。</p>
+  </div>
+</div>
+
+<!-- ===== 单项编辑 ===== -->
+<div class="sheet" id="itemSheet">
+  <div class="sh-head"><h3 id="isTitle">编辑项目</h3><button class="sh-x" id="isClose">✕</button></div>
+  <div class="sh-body">
+    <div class="row2">
+      <div class="field" style="flex:0 0 84px"><label>Emoji</label><input id="ieEmoji" maxlength="4" placeholder="🏃"></div>
+      <div class="field"><label>名称</label><input id="ieName" maxlength="12" placeholder="项目名"></div>
+    </div>
+    <div class="field"><label>负责人（谁打这个卡）</label>
+      <select id="ieWho">
+        <option value="husband">老公</option>
+        <option value="wife">老婆</option>
+        <option value="both">两人共用（谁打都行）</option>
+      </select>
+    </div>
+    <div class="field"><label>每周哪几天（不选 = 每天都要打）</label><div class="daychips" id="ieDays"></div></div>
+    <button class="btn primary" id="ieSave">保存</button>
+    <p class="hint">修改会同步到云端，对方下次打开就能看到。</p>
+  </div>
+</div>
+
+<!-- ===== 首次引导 ===== -->
+<div id="setup">
+  <div class="su-card">
+    <h1>💑 夫妻打卡</h1>
+    <div class="sub">一起变好，互相看得见</div>
+
+    <div class="secttl">这台手机是谁的？</div>
+    <div class="idpick" style="margin-bottom:16px">
+      <div class="idopt h" data-id="husband"><span>👨</span>老公</div>
+      <div class="idopt w" data-id="wife"><span>👩</span>老婆</div>
+    </div>
+
+    <div class="secttl">连接另一半（2 分钟）</div>
+    <div class="step"><div class="n">1</div><p>电脑上打开 <a href="https://github.com/settings/tokens/new?scopes=gist&description=couple-checkin" target="_blank">github.com/settings/tokens/new</a><br>生成一个 Token：<b>只勾 gist</b>，复制以 ghp_ 开头的一串。</p></div>
+    <div class="step"><div class="n">2</div><p>打开 <a href="https://gist.github.com/" target="_blank">gist.github.com</a> 新建私密 Gist：文件名填 <b>data.json</b>，内容填 <b>{}</b>，选 <b>Create secret gist</b>。创建后浏览器地址栏最后一段就是 Gist ID。</p></div>
+    <div class="step"><div class="n">3</div><p>把 Gist ID 和 Token 填到下面（两人填同一份）。先填的一方点「保存并同步」，模板会自动传上去，另一方打开即见。</p></div>
+
+    <div class="field"><label>Gist ID</label><input id="suGist" placeholder="那串字符"></div>
+    <div class="field"><label>Token</label><input id="suToken" type="password" placeholder="ghp_...."></div>
+    <button class="btn primary" id="suStart">保存并开始</button>
+    <button class="btn ghost" id="suTrial" style="margin-top:8px">先本地试用，以后再连</button>
+    <p class="hint" style="margin-top:12px">🔒 数据只存在你们两人的私密 Gist 里；Token 相当于钥匙，别发给外人。以后随时可在 ⚙ 设置里修改。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= 基础 ================= */
+var $ = function(id){ return document.getElementById(id); };
+var LS_KEY = "couple_checkin_v1";
+var DAYN = ["周日","周一","周二","周三","周四","周五","周六"];
+var DAYS = [1,2,3,4,5,6,0]; // 周一开始
+
+var DEFAULT_ITEMS = [
+  {id:"hus_ex",  emoji:"🏃", name:"老公运动",     who:"husband", days:null},
+  {id:"wife_ex", emoji:"🤸", name:"老婆运动",     who:"wife",    days:null},
+  {id:"hus_slp", emoji:"😴", name:"老公早睡",     who:"husband", days:null},
+  {id:"wife_slp",emoji:"🌙", name:"老婆早睡",     who:"wife",    days:null},
+  {id:"folic",   emoji:"💊", name:"老婆叶酸400μg",who:"wife",    days:null},
+  {id:"hus_nosmoke", emoji:"🚭", name:"老公不烟酒", who:"husband", days:null},
+  {id:"wife_nosmoke",emoji:"🚭", name:"老婆不烟酒", who:"wife",    days:null},
+  {id:"tea",     emoji:"🧋", name:"奶茶控制",     who:"both",    days:null},
+  {id:"coffee",  emoji:"☕", name:"咖啡控制",     who:"both",    days:null},
+  {id:"water",   emoji:"💧", name:"饮水充足",     who:"both",    days:null},
+  {id:"veggie",  emoji:"🥗", name:"蔬菜水果",     who:"both",    days:null},
+  {id:"protein", emoji:"🍗", name:"优质蛋白",     who:"both",    days:null},
+  {id:"nosweet", emoji:"🍬", name:"少甜食",       who:"both",    days:null},
+  {id:"nodrink", emoji:"🥤", name:"少含糖饮料",   who:"both",    days:null},
+  {id:"nosit",   emoji:"🛋️", name:"不久坐",       who:"both",    days:null},
+  {id:"ovu",     emoji:"🧪", name:"排卵试纸",     who:"wife",    days:[3,4,5]},
+  {id:"sex",     emoji:"❤️", name:"同房",         who:"both",    days:[2,4]}
+];
+
+var state = load();
+
+function load(){
+  try{
+    var s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    if(!s.items || !s.items.length){ s.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS)); }
+    s.checks = s.checks || {};
+    s.pending = s.pending || [];
+    s.config = s.config || {me:"", nickH:"老公", nickW:"老婆", gist:"", token:""};
+    s.weekOffset = 0;
+    return s;
+  }catch(e){
+    return {items:JSON.parse(JSON.stringify(DEFAULT_ITEMS)), checks:{}, pending:[],
+            config:{me:"", nickH:"老公", nickW:"老婆", gist:"", token:""}, weekOffset:0};
+  }
+}
+function save(){
+  var s = {items:state.items, checks:state.checks, pending:state.pending, config:state.config};
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(e){}
+}
+
+/* ================= 日期 ================= */
+function pad(n){ return (n<10?"0":"")+n; }
+function dstr(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function parseD(s){ var p=s.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+function mondayOf(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; }
+function weekDates(off){
+  var m = mondayOf(new Date()); m.setDate(m.getDate()+off*7); var out=[];
+  for(var i=0;i<7;i++){ var x=new Date(m); x.setDate(m.getDate()+i); out.push(x); }
+  return out;
+}
+function fmtMD(d){ return (d.getMonth()+1)+"月"+d.getDate()+"日"; }
+
+/* ================= 渲染 ================= */
+function myName(){ return state.config.me==="wife" ? state.config.nickW||"老婆" : state.config.nickH||"老公"; }
+function nameOf(who){ return who==="wife" ? state.config.nickW||"老婆" : state.config.nickH||"老公"; }
+
+function render(){
+  // header
+  var me = state.config.me || "husband";
+  var b = $("meBadge"); b.className = "badge " + (me==="wife"?"w":"h");
+  $("meName").textContent = myName();
+  $("hNick").textContent = state.config.nickH||"老公";
+  $("wNick").textContent = state.config.nickW||"老婆";
+
+  var dates = weekDates(state.weekOffset);
+  var thisWeek = state.weekOffset===0;
+  $("wl1").textContent = fmtMD(dates[0])+" – "+fmtMD(dates[6]);
+  $("wl2").textContent = thisWeek ? "本周 · 点击回到今天" : "点击回到本周";
+  var todayStr = dstr(new Date());
+
+  // table
+  var html = "<thead><tr><th class='corner'>项目</th>";
+  for(var i=0;i<7;i++){
+    var d=dates[i], ds=dstr(d);
+    html += "<th class='"+(ds===todayStr?"today":"")+"'>"+DAYN[d.getDay()].slice(1)+"<small>"+(d.getMonth()+1)+"/"+d.getDate()+"</small></th>";
+  }
+  html += "</tr></thead><tbody>";
+
+  for(var r=0; r<state.items.length; r++){
+    var it = state.items[r];
+    html += "<tr><td class='name'><span class='em'>"+(it.emoji||"📌")+"</span>"+esc(it.name)+"</td>";
+    for(var c=0;c<7;c++){
+      var d2=dates[c], ds2=dstr(d2), wd=d2.getDay();
+      var planned = !it.days || it.days.indexOf(wd)>=0;
+      var cls = "cell"+(ds2===todayStr?" today":"");
+      if(!planned){ html += "<td class='"+cls+" off'><span class='box'>·</span></td>"; continue; }
+      var rec = state.checks[ds2] ? state.checks[ds2][it.id] : null;
+      if(rec){
+        cls += " "+(rec==="wife"?"wife":"husband");
+        html += "<td class='"+cls+"' data-d='"+ds2+"' data-i='"+it.id+"'><span class='box'>✓</span></td>";
+      }else{
+        var other = it.who!=="both" && it.who!==me;
+        cls += other ? " who" : "";
+        var mark = other ? nameOf(it.who).slice(0,1) : "";
+        html += "<td class='"+cls+"' data-d='"+ds2+"' data-i='"+it.id+"'><span class='box'>"+mark+"</span></td>";
+      }
+    }
+    html += "</tr>";
+  }
+  html += "</tbody>";
+  $("tbl").innerHTML = html;
+  renderStats(dates);
+  renderLocalHint();
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
+
+function renderStats(dates){
+  var cnt = {husband:[0,0], wife:[0,0]};
+  for(var i=0;i<7;i++){
+    var d=dates[i], ds=dstr(d), wd=d.getDay(), day=state.checks[ds]||{};
+    for(var j=0;j<state.items.length;j++){
+      var it=state.items[j];
+      if(it.days && it.days.indexOf(wd)<0) continue;
+      if(it.who!=="both") cnt[it.who][1]++;
+      else { cnt.husband[1]++; cnt.wife[1]++; }
+      if(day[it.id]){ cnt.husband[0]++; cnt.wife[0]++; }
+    }
+  }
+  [["husband","hPct","hNum","hBar"],["wife","wPct","wNum","wBar"]].forEach(function(p){
+    var k=p[0], done=cnt[k][0], total=cnt[k][1];
+    var pct = total? Math.round(done*100/total) : 0;
+    $(p[1]).textContent = pct+"%"; $(p[2]).textContent = done+"/"+total;
+    $(p[3]).style.width = pct+"%";
+  });
+}
+
+function renderLocalHint(){
+  $("localHint").style.display = (state.config.gist && state.config.token) ? "none" : "block";
+}
+
+/* ================= 打卡 ================= */
+function toggle(dateStr, itemId){
+  var it=null;
+  for(var i=0;i<state.items.length;i++) if(state.items[i].id===itemId){ it=state.items[i]; break; }
+  if(!it) return;
+  state.checks[dateStr] = state.checks[dateStr] || {};
+  var me = state.config.me==="wife" ? "wife" : "husband";
+  var cur = state.checks[dateStr][itemId];
+  if(cur){
+    delete state.checks[dateStr][itemId];
+    state.pending.push({d:dateStr, i:itemId, by:null, ts:Date.now()});
+  }else{
+    state.checks[dateStr][itemId] = me;
+    state.pending.push({d:dateStr, i:itemId, by:me, ts:Date.now()});
+  }
+  if(state.pending.length>800) state.pending = state.pending.slice(-800);
+  save(); render();
+  toastMsg(cur ? "已取消" : "打卡成功 · "+it.name);
+  schedulePush();
+}
+
+/* ================= 同步 ================= */
+var syncing=false;
+function ghHeaders(){
+  return {"Authorization":"Bearer "+state.config.token,
+          "Accept":"application/vnd.github+json",
+          "Content-Type":"application/json"};
+}
+function hasCfg(){ return !!(state.config.gist && state.config.token); }
+function setDot(cls){ $("syncDot").className = "dot "+(cls||""); }
+
+function applyRemote(remote){
+  var items = (remote.items && remote.items.length) ? remote.items : state.items;
+  // 本地未同步的 pending 优先
+  var checks = {};
+  var rc = remote.checks || {};
+  for(var d in rc){
+    checks[d] = {};
+    for(var k in rc[d]) checks[d][k] = rc[d][k];
+  }
+  state.pending.forEach(function(op){
+    if(!checks[op.d]) checks[op.d]={};
+    if(op.by) checks[op.d][op.i]=op.by; else delete checks[op.d][op.i];
+  });
+  state.items = items; state.checks = checks;
+}
+
+async function pullSilent(){
+  if(!hasCfg() || syncing) return;
+  syncing=true; setDot("busy");
+  try{
+    var r = await fetch("https://api.github.com/gists/"+state.config.gist, {headers:ghHeaders()});
+    if(r.status===401||r.status===403){ setDot("err"); toastMsg("Token 无效或没勾 gist 权限"); return; }
+    if(r.status===404){ setDot("err"); toastMsg("找不到这个 Gist，检查 ID"); return; }
+    if(!r.ok){ throw new Error("HTTP "+r.status); }
+    var j = await r.json();
+    var f = j.files && j.files["data.json"];
+    if(!f){ setDot("err"); toastMsg("Gist 里没有 data.json 文件"); return; }
+    var remote = {};
+    try{ remote = JSON.parse(f.content||"{}"); }catch(e){}
+    applyRemote(remote);
+    state.pending = [];
+    save(); render(); setDot("ok");
+  }catch(e){
+    setDot("err"); toastMsg("同步失败，先用本地数据（联网后自动重试）");
+  }finally{ syncing=false; }
+}
+
+var pushTimer=null;
+function schedulePush(){ clearTimeout(pushTimer); pushTimer=setTimeout(push, 900); }
+
+async function push(){
+  if(!hasCfg() || syncing || !state.pending.length){ if(hasCfg()) setDot("ok"); return; }
+  syncing=true; setDot("busy");
+  try{
+    // 先取远端最新，合并后写回（gist 是 last-write-wins，窗口极小）
+    var remote = {};
+    var r = await fetch("https://api.github.com/gists/"+state.config.gist, {headers:ghHeaders()});
+    if(r.ok){
+      var j = await r.json();
+      var f = j.files && j.files["data.json"];
+      if(f){ try{ remote = JSON.parse(f.content||"{}"); }catch(e){} }
+    }
+    var rc = remote.checks || {};
+    state.pending.forEach(function(op){
+      rc[op.d] = rc[op.d] || {};
+      if(op.by) rc[op.d][op.i]=op.by; else delete rc[op.d][op.i];
+    });
+    var body = {files:{"data.json":{content: JSON.stringify({items:state.items, checks:rc})}}};
+    var wr = await fetch("https://api.github.com/gists/"+state.config.gist,
+      {method:"PATCH", headers:ghHeaders(), body:JSON.stringify(body)});
+    if(!wr.ok){ throw new Error("write "+wr.status); }
+    state.pending=[]; save(); setDot("ok");
+  }catch(e){
+    setDot("err"); toastMsg("没同步上去，联网后自动重试");
+  }finally{ syncing=false; }
+}
+
+window.addEventListener("online", function(){ if(hasCfg()){ pullSilent(); } });
+
+/* ================= 设置面板 ================= */
+function openSheet(id){
+  $("mask").classList.add("show");
+  $(id).classList.add("show");
+  if(id==="setSheet"){ renderSettings(); }
+}
+function closeSheet(id){
+  $(id).classList.remove("show");
+  var anyOpen = $("setSheet").classList.contains("show") || $("itemSheet").classList.contains("show");
+  if(!anyOpen) $("mask").classList.remove("show");
+}
+function closeSheets(){ closeSheet("setSheet"); closeSheet("itemSheet"); }
+
+function renderSettings(){
+  $("nickH").value = state.config.nickH||"老公";
+  $("nickW").value = state.config.nickW||"老婆";
+  $("gistId").value = state.config.gist||"";
+  $("token").value = state.config.token||"";
+  document.querySelectorAll("#setSheet .idopt").forEach(function(el){
+    el.classList.toggle("on", el.getAttribute("data-id")===(state.config.me||"husband"));
+  });
+  var html="";
+  state.items.forEach(function(it, idx){
+    var whoTxt = it.who==="both" ? "两人共用" : nameOf(it.who);
+    var cls = it.who==="both" ? "b" : (it.who==="wife"?"w":"h");
+    var daysTxt = (!it.days || !it.days.length) ? "每天" :
+      it.days.slice().sort(function(a,b){return (a===0?7:a)-(b===0?7:b);}).map(function(x){return DAYN[x].slice(1);}).join("/");
+    html += "<div class='itemrow'><div class='iemoji'>"+(it.emoji||"📌")+"</div>"+
+      "<div class='iname'>"+esc(it.name)+"<small><span class='who-chip "+cls+"'>"+whoTxt+"</span> · "+daysTxt+"</small></div>"+
+      "<div class='iact'><button class='mini' data-edit='"+idx+"'>改</button> <button class='mini del' data-del='"+idx+"'>删</button></div></div>";
+  });
+  $("itemList").innerHTML = html;
+}
+
+/* item editor */
+var editing = -1;
+function openItemEditor(idx){
+  editing = idx;
+  var it = idx>=0 ? state.items[idx] : {emoji:"",name:"",who:"both",days:null};
+  $("isTitle").textContent = idx>=0 ? "编辑项目" : "添加项目";
+  $("ieEmoji").value = it.emoji||"";
+  $("ieName").value = it.name||"";
+  $("ieWho").value = it.who||"both";
+  renderDayChips(it.days||[]);
+  openSheet("itemSheet");
+}
+function renderDayChips(sel){
+  var html="";
+  [1,2,3,4,5,6,0].forEach(function(d){
+    var on = sel.indexOf(d)>=0;
+    html += "<div class='daychip"+(on?" on":"")+"' data-d='"+d+"'>"+DAYN[d].slice(1)+"</div>";
+  });
+  $("ieDays").innerHTML = html;
+}
+var tmpDays = [];
+
+/* ================= toast ================= */
+var toastTimer=null;
+function toastMsg(t){
+  $("toast").textContent=t; $("toast").style.display="block";
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ $("toast").style.display="none"; }, 1600);
+}
+
+/* ================= 事件绑定 ================= */
+$("prevW").onclick = function(){ state.weekOffset--; render(); };
+$("nextW").onclick = function(){ if(state.weekOffset<0){state.weekOffset++; render();} };
+$("weekLabel").onclick = function(){ state.weekOffset=0; render(); };
+$("meBadge").onclick = function(){
+  var me = state.config.me==="wife" ? "wife" : "husband";
+  var other = me==="wife" ? "husband" : "wife";
+  state.config.me = other; save(); render();
+  toastMsg("已切换为「"+myName()+"」的视角（这台手机的身份可在⚙里改）");
+};
+$("tbl").onclick = function(e){
+  var td = e.target.closest("td.cell");
+  if(!td || !td.getAttribute("data-d")) return;
+  toggle(td.getAttribute("data-d"), td.getAttribute("data-i"));
+};
+$("fab").onclick = function(){ openSheet("setSheet"); };
+$("setClose").onclick = function(){ closeSheet("setSheet"); };
+$("isClose").onclick = function(){ closeSheet("itemSheet"); };
+$("mask").onclick = closeSheets;
+
+$("saveSync").onclick = function(){
+  state.config.gist = $("gistId").value.trim();
+  state.config.token = $("token").value.trim();
+  state.config.nickH = $("nickH").value.trim()||"老公";
+  state.config.nickW = $("nickW").value.trim()||"老婆";
+  save(); renderLocalHint();
+  toastMsg("已保存，正在同步…");
+  pullSilent();
+};
+$("testConn").onclick = async function(){
+  var g=$("gistId").value.trim(), t=$("token").value.trim();
+  if(!g||!t){ toastMsg("先填 Gist ID 和 Token"); return; }
+  toastMsg("测试中…");
+  try{
+    var r = await fetch("https://api.github.com/gists/"+g, {headers:{"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json"}});
+    if(r.ok){ var j=await r.json(); toastMsg("连接成功：" + (j.description||j.id)); }
+    else if(r.status===401){ toastMsg("Token 无效"); }
+    else if(r.status===404){ toastMsg("Gist 不存在（注意是 secret/private gist）"); }
+    else{ toastMsg("HTTP "+r.status); }
+  }catch(e){ toastMsg("网络不通：检查网络或 GitHub 是否可达"); }
+};
+
+document.querySelectorAll("#setSheet .idopt").forEach(function(el){
+  el.onclick = function(){
+    state.config.me = el.getAttribute("data-id");
+    state.config.nickH = $("nickH").value.trim()||"老公";
+    state.config.nickW = $("nickW").value.trim()||"老婆";
+    save(); render(); renderSettings();
+  };
+});
+
+$("itemList").onclick = function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  if(b.hasAttribute("data-edit")) openItemEditor(+b.getAttribute("data-edit"));
+  if(b.hasAttribute("data-del")){
+    var idx=+b.getAttribute("data-del");
+    if(confirm("删除「"+state.items[idx].name+"」？历史打卡记录会保留。")){
+      state.items.splice(idx,1); save(); schedulePush(); renderSettings(); render();
+    }
+  }
+};
+$("addItem").onclick = function(){ tmpDays=[]; openItemEditor(-1); };
+
+$("ieDays").onclick = function(e){
+  var c=e.target.closest(".daychip"); if(!c) return;
+  var d=+c.getAttribute("data-d");
+  var i=tmpDays.indexOf(d);
+  if(i>=0){ tmpDays.splice(i,1); c.classList.remove("on"); }
+  else{ tmpDays.push(d); c.classList.add("on"); }
+};
+$("ieSave").onclick = function(){
+  var name=$("ieName").value.trim();
+  if(!name){ toastMsg("先填项目名"); return; }
+  var it={ id:(editing>=0? state.items[editing].id : "it_"+Date.now()),
+           emoji:$("ieEmoji").value.trim()||"📌", name:name,
+           who:$("ieWho").value, days: tmpDays.length? tmpDays.slice().sort() : null };
+  if(editing>=0) state.items[editing]=it; else state.items.push(it);
+  save(); schedulePush(); closeSheet("itemSheet"); render(); renderSettings();
+};
+
+$("wipeLocal").onclick = function(){
+  if(confirm("清空本机缓存？云端数据不受影响，清空后自动重新拉取。")){
+    localStorage.removeItem(LS_KEY);
+    location.reload();
+  }
+};
+
+/* setup guide */
+document.querySelectorAll("#setup .idopt").forEach(function(el){
+  el.onclick = function(){
+    document.querySelectorAll("#setup .idopt").forEach(function(x){ x.classList.remove("on"); });
+    el.classList.add("on");
+  };
+});
+$("suStart").onclick = function(){
+  var g=$("suGist").value.trim(), t=$("suToken").value.trim();
+  var sel = document.querySelector("#setup .idopt.on");
+  state.config.me = sel ? sel.getAttribute("data-id") : "husband";
+  if(!g||!t){ toastMsg("两个都要填哦（或选「先本地试用」）"); return; }
+  state.config.gist=g; state.config.token=t; save();
+  $("setup").classList.remove("show");
+  render();
+  toastMsg("已连接，正在拉取数据…");
+  pullSilent();
+};
+$("suTrial").onclick = function(){
+  var sel = document.querySelector("#setup .idopt.on");
+  state.config.me = sel ? sel.getAttribute("data-id") : "husband";
+  save();
+  $("setup").classList.remove("show");
+  render();
+  toastMsg("本地模式：数据只在本机，连好后去⚙设置");
+};
+
+/* ================= 启动 ================= */
+if(!state.config.me){ $("setup").classList.add("show"); }
+render();
+if(hasCfg()){ pullSilent(); } else { setDot(""); }
+setInterval(function(){ if(hasCfg() && !syncing && state.pending.length) push(); }, 30000);
+</script>
+<script>
+if ("serviceWorker" in navigator &&
+    (location.protocol === "https:" || ["127.0.0.1","localhost"].indexOf(location.hostname) >= 0)) {
+  addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
