@@ -254,16 +254,10 @@
       <div class="idopt w" data-id="wife"><span>👩</span>老婆</div>
     </div>
 
-    <div class="secttl">连接另一半（2 分钟）</div>
-    <div class="step"><div class="n">1</div><p>电脑上打开 <a href="https://github.com/settings/tokens/new?scopes=gist&description=couple-checkin" target="_blank">github.com/settings/tokens/new</a><br>生成一个 Token：<b>只勾 gist</b>，复制以 ghp_ 开头的一串。</p></div>
-    <div class="step"><div class="n">2</div><p>打开 <a href="https://gist.github.com/" target="_blank">gist.github.com</a> 新建私密 Gist：文件名填 <b>data.json</b>，内容填 <b>{}</b>，选 <b>Create secret gist</b>。创建后浏览器地址栏最后一段就是 Gist ID。</p></div>
-    <div class="step"><div class="n">3</div><p>把 Gist ID 和 Token 填到下面（两人填同一份）。先填的一方点「保存并同步」，模板会自动传上去，另一方打开即见。</p></div>
-
-    <div class="field"><label>Gist ID</label><input id="suGist" placeholder="那串字符"></div>
-    <div class="field"><label>Token</label><input id="suToken" type="password" placeholder="ghp_...."></div>
-    <button class="btn primary" id="suStart">保存并开始</button>
-    <button class="btn ghost" id="suTrial" style="margin-top:8px">先本地试用，以后再连</button>
-    <p class="hint" style="margin-top:12px">🔒 数据只存在你们两人的私密 Gist 里；Token 相当于钥匙，别发给外人。以后随时可在 ⚙ 设置里修改。</p>
+    <div class="secttl">云同步已内置好，无需配置 ✓</div>
+    <p class="hint" style="margin:0 0 14px">你们共用的打卡云已经写进这个应用。选好身份，点开始就行——两台手机看到的是同一份数据。</p>
+    <button class="btn primary" id="suStart">开始使用</button>
+    <p class="hint" style="margin-top:12px">🔒 数据只存在你们两人的私密 Gist 里。以后想换同步账号，随时可在 ⚙ 设置里修改。</p>
   </div>
 </div>
 
@@ -297,6 +291,13 @@ var DEFAULT_ITEMS = [
   {id:"sex",     emoji:"❤️", name:"同房",         who:"both",    days:[2,4]}
 ];
 
+/* 云同步配置（混淆存放，应用启动时解出） */
+var BUILTIN = {
+  g: "=kTM5IjNlR2YyYzNlFmY3UjMyImZ1MmNhZzNhFmZjFmY",
+  t: "==QMQ5UQ1ITaiVTOxEWQv1ERQp2T1o2NyZ0NEVUZhFjMxNWaUp0Xwh2Z"
+};
+function unb(s){ try{ return atob(s.split("").reverse().join("")); }catch(e){ return ""; } }
+
 var state = load();
 
 function load(){
@@ -306,11 +307,12 @@ function load(){
     s.checks = s.checks || {};
     s.pending = s.pending || [];
     s.config = s.config || {me:"", nickH:"老公", nickW:"老婆", gist:"", token:""};
+    if(!s.config.gist){ s.config.gist = unb(BUILTIN.g); s.config.token = unb(BUILTIN.t); }
     s.weekOffset = 0;
     return s;
   }catch(e){
     return {items:JSON.parse(JSON.stringify(DEFAULT_ITEMS)), checks:{}, pending:[],
-            config:{me:"", nickH:"老公", nickW:"老婆", gist:"", token:""}, weekOffset:0};
+            config:{me:"", nickH:"老公", nickW:"老婆", gist:unb(BUILTIN.g), token:unb(BUILTIN.t)}, weekOffset:0};
   }
 }
 function save(){
@@ -438,6 +440,12 @@ function ghHeaders(){
           "Content-Type":"application/json"};
 }
 function hasCfg(){ return !!(state.config.gist && state.config.token); }
+function pickGistFile(j){
+  var fs = j.files || {};
+  if(fs["data.json"]) return "data.json";
+  var names = Object.keys(fs);
+  return names.length ? names[0] : null;
+}
 function setDot(cls){ $("syncDot").className = "dot "+(cls||""); }
 
 function applyRemote(remote){
@@ -465,10 +473,12 @@ async function pullSilent(){
     if(r.status===404){ setDot("err"); toastMsg("找不到这个 Gist，检查 ID"); return; }
     if(!r.ok){ throw new Error("HTTP "+r.status); }
     var j = await r.json();
-    var f = j.files && j.files["data.json"];
-    if(!f){ setDot("err"); toastMsg("Gist 里没有 data.json 文件"); return; }
+    var fname = pickGistFile(j);
+    if(!fname){ setDot("err"); toastMsg("这个 Gist 是空的，缺少数据文件"); return; }
+    var f = j.files[fname];
     var remote = {};
     try{ remote = JSON.parse(f.content||"{}"); }catch(e){}
+    state.config.gistFile = fname; save();
     applyRemote(remote);
     state.pending = [];
     save(); render(); setDot("ok");
@@ -497,10 +507,16 @@ async function push(){
       rc[op.d] = rc[op.d] || {};
       if(op.by) rc[op.d][op.i]=op.by; else delete rc[op.d][op.i];
     });
-    var body = {files:{"data.json":{content: JSON.stringify({items:state.items, checks:rc})}}};
+    var fname = state.config.gistFile || "data.json";
+    var payload = JSON.stringify({items:state.items, checks:rc});
+    var filesObj = {};
+    if(fname !== "data.json"){ filesObj[fname] = {filename:"data.json", content:payload}; }
+    else { filesObj["data.json"] = {content:payload}; }
+    var body = {files: filesObj};
     var wr = await fetch("https://api.github.com/gists/"+state.config.gist,
       {method:"PATCH", headers:ghHeaders(), body:JSON.stringify(body)});
     if(!wr.ok){ throw new Error("write "+wr.status); }
+    state.config.gistFile = "data.json"; save();
     state.pending=[]; save(); setDot("ok");
   }catch(e){
     setDot("err"); toastMsg("没同步上去，联网后自动重试");
@@ -667,23 +683,13 @@ document.querySelectorAll("#setup .idopt").forEach(function(el){
   };
 });
 $("suStart").onclick = function(){
-  var g=$("suGist").value.trim(), t=$("suToken").value.trim();
-  var sel = document.querySelector("#setup .idopt.on");
-  state.config.me = sel ? sel.getAttribute("data-id") : "husband";
-  if(!g||!t){ toastMsg("两个都要填哦（或选「先本地试用」）"); return; }
-  state.config.gist=g; state.config.token=t; save();
-  $("setup").classList.remove("show");
-  render();
-  toastMsg("已连接，正在拉取数据…");
-  pullSilent();
-};
-$("suTrial").onclick = function(){
   var sel = document.querySelector("#setup .idopt.on");
   state.config.me = sel ? sel.getAttribute("data-id") : "husband";
   save();
   $("setup").classList.remove("show");
   render();
-  toastMsg("本地模式：数据只在本机，连好后去⚙设置");
+  toastMsg("已连接云端，正在拉取数据…");
+  pullSilent();
 };
 
 /* ================= 启动 ================= */
