@@ -88,6 +88,8 @@
     display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:#fff}
   .dayrow.done-h .dbox{background:var(--blue); border-color:var(--blue)}
   .dayrow.done-w .dbox{background:var(--pink); border-color:var(--pink)}
+  .dayrow.theirs .dbox{border-style:dashed; background:#fff; color:var(--sub)}
+  .dayrow.theirs{opacity:.8}
   .dayrow.off .dbox{border-style:dashed; border-color:#c9c9d2; background:#fafafa; color:#b0b0ba; font-size:11px; font-weight:600}
   .dayrow.locked{opacity:.55; cursor:default}
   .dayrow.locked:active{background:transparent}
@@ -211,7 +213,8 @@
     <div class="legend">
       <span><b style="background:var(--blue)"></b>宏宏打的卡</span>
       <span><b style="background:var(--pink)"></b>漫漫打的卡</span>
-      <span style="margin-left:auto">点行打卡 · 同房两人都可打</span>
+      <span><b style="background:#fff;border:1.5px dashed #c9c9d2;box-sizing:border-box"></b>对方已打（等你打卡）</span>
+      <span style="margin-left:auto">点行打卡</span>
     </div>
   </div>
   <div class="tablecard" style="margin-top:10px">
@@ -399,6 +402,21 @@ function unb(s){ try{ return atob(s.split("").reverse().join("")); }catch(e){ re
 
 var state = load();
 
+function migrateChecks(checks){
+  var changed = false;
+  for(var d in checks){
+    var day = checks[d];
+    for(var id in day){
+      var v = day[id];
+      if(typeof v === "string"){
+        day[id] = (v==="wife") ? {w:true} : {h:true};
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
 function migrateItems(items){
   var changed = false;
   // 1) 补老公叶酸（插在老婆叶酸前面）
@@ -430,9 +448,11 @@ function migrateItems(items){
   items.forEach(function(x){
     if(x.days){ x.days = null; changed = true; }
   });
-  // 5) 同房/排卵试纸不计入每日计划
+  // 5) 同房/排卵试纸不计入每日计划（按 id 或名字识别，手动重新添加也生效）
   items.forEach(function(x){
-    if((x.id==="ovu" || x.id==="sex") && !x.noPlan){ x.noPlan = true; changed = true; }
+    var special = (x.id==="ovu" || x.id==="sex" ||
+      (x.name && (x.name.indexOf("同房")>=0 || x.name.indexOf("排卵")>=0)));
+    if(special && !x.noPlan){ x.noPlan = true; changed = true; }
   });
   return changed;
 }
@@ -443,6 +463,7 @@ function load(){
     if(!s.items || !s.items.length){ s.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS)); }
     else { migrateItems(s.items); }
     s.checks = s.checks || {};
+    migrateChecks(s.checks);
     s.pending = s.pending || [];
     s.config = s.config || {me:"", nickH:"宏宏", nickW:"漫漫", gist:"", token:"", qualLine:10, notify:{}, lastSync:0};
     if(!s.config.gist){ s.config.gist = unb(BUILTIN.g); s.config.token = unb(BUILTIN.t); }
@@ -498,15 +519,20 @@ function render(){
   $("qlShow").textContent = state.config.qualLine||10;
 
   // 单日清单：只显示自己的项目 + 共同项目（同房）
+  var myKey = (me==="wife") ? "w" : "h";
+  var otherKey = (me==="wife") ? "h" : "w";
   var html = "";
   for(var r=0; r<state.items.length; r++){
     var it = state.items[r];
     if(it.who!==me && it.who!=="both") continue;
-    var rec = state.checks[ds] ? state.checks[ds][it.id] : null;
+    var mark = state.checks[ds] ? state.checks[ds][it.id] : null;
+    var mine = !!(mark && typeof mark==="object" && mark[myKey]);
+    var theirs = !!(mark && typeof mark==="object" && mark[otherKey]);
     var cls = "dayrow";
-    if(rec) cls += (rec==="wife" ? " done-w" : " done-h");
+    if(mine) cls += (me==="wife" ? " done-w" : " done-h");
+    else if(theirs) cls += " theirs";
     if(locked) cls += " locked";
-    var box = rec ? "✓" : "";
+    var box = mine ? "✓" : (theirs ? "✓" : "");
     html += "<div class='"+cls+"' data-d='"+ds+"' data-i='"+it.id+"'>"+
       "<div class='dem'>"+(it.emoji||"📌")+"</div>"+
       "<div class='dname'><span class='nm'>"+esc(it.name)+"</span></div>"+
@@ -529,11 +555,15 @@ function computeDay(ds){
     // 计划数：每天固定
     if(it.who==="both"){ cnt.husband[1]++; cnt.wife[1]++; }
     else cnt[it.who][1]++;
-    // 完成数：专属项目永远归项目主人（代打也算主人的），共用项目谁打的算谁
-    var done = day[it.id];
-    if(done){
-      if(it.who==="both") cnt[done][0]++;
-      else cnt[it.who][0]++;
+    // 完成数：每人只看自己的标记；专属项目谁代的都算主人的
+    var mark = day[it.id];
+    if(!mark) continue;
+    if(it.who==="both"){
+      if(mark.h) cnt.husband[0]++;
+      if(mark.w) cnt.wife[0]++;
+    }else{
+      var ownerDone = (typeof mark==="object") ? (mark.h || mark.w) : true;
+      if(ownerDone) cnt[it.who][0]++;
     }
   }
   return cnt;
@@ -609,15 +639,22 @@ function toggle(dateStr, itemId){
   var it=null;
   for(var i=0;i<state.items.length;i++) if(state.items[i].id===itemId){ it=state.items[i]; break; }
   if(!it) return;
-  state.checks[dateStr] = state.checks[dateStr] || {};
   var me = state.config.me==="wife" ? "wife" : "husband";
-  var cur = state.checks[dateStr][itemId];
+  var myKey = (me==="wife") ? "w" : "h";
+
+  var store = state.checks[dateStr] = state.checks[dateStr] || {};
+  var mark = store[itemId];
+  if(typeof mark !== "object" || mark===null) mark = {};
+  var cur = !!mark[myKey];
+
   if(cur){
-    delete state.checks[dateStr][itemId];
-    state.pending.push({d:dateStr, i:itemId, by:null, ts:Date.now()});
+    delete mark[myKey];
+    if(!Object.keys(mark).length) delete store[itemId];
+    state.pending.push({d:dateStr, i:itemId, key:myKey, on:false, ts:Date.now()});
   }else{
-    state.checks[dateStr][itemId] = me;
-    state.pending.push({d:dateStr, i:itemId, by:me, ts:Date.now()});
+    mark[myKey] = true;
+    store[itemId] = mark;
+    state.pending.push({d:dateStr, i:itemId, key:myKey, on:true, ts:Date.now()});
   }
   if(state.pending.length>800) state.pending = state.pending.slice(-800);
   save(); render();
@@ -644,16 +681,22 @@ function setDot(cls){ $("syncDot").className = "dot "+(cls||""); }
 function applyRemote(remote){
   var items = (remote.items && remote.items.length) ? remote.items : state.items;
   var grew = migrateItems(items);
-  // 本地未同步的 pending 优先
+  // 云端打卡数据：迁移到新格式 + 本地未同步的操作优先
   var checks = {};
   var rc = remote.checks || {};
   for(var d in rc){
     checks[d] = {};
     for(var k in rc[d]) checks[d][k] = rc[d][k];
   }
+  migrateChecks(checks);
   state.pending.forEach(function(op){
+    var key = op.key || (op.by==="wife" ? "w" : "h");
+    var on = (op.on !== undefined) ? op.on : !!op.by;
     if(!checks[op.d]) checks[op.d]={};
-    if(op.by) checks[op.d][op.i]=op.by; else delete checks[op.d][op.i];
+    var m = checks[op.d][op.i];
+    if(typeof m !== "object" || m===null){ m = (typeof m==="string" && m==="wife") ? {w:true} : {}; }
+    if(on) m[key]=true; else delete m[key];
+    if(Object.keys(m).length) checks[op.d][op.i]=m; else delete checks[op.d][op.i];
   });
   state.items = items; state.checks = checks;
   return grew;
@@ -961,7 +1004,8 @@ function computeStreak(who, ql){
 }
 
 function computeMyStats(who){
-  var done = 0, days = {}, perfect = false;
+  var done = 0, perfect = false;
+  var myKey = (who==="wife") ? "w" : "h";
   var ql = state.config.qualLine||10;
   for(var ds in state.checks){
     var day = state.checks[ds];
@@ -970,10 +1014,10 @@ function computeMyStats(who){
       var it = state.items[i];
       if(it.noPlan) continue;
       if(it.who==="both" || it.who===who){ myTotal++; }
-      var r = day[it.id];
-      if(r){
-        var owner = (it.who==="both") ? r : it.who;
-        if(owner===who){ done++; myDone++; }
+      var mark = day[it.id];
+      if(mark){
+        var mine = (typeof mark==="object") ? !!mark[myKey] : (mark===who);
+        if(mine){ done++; myDone++; }
       }
     }
     if(myTotal>0 && myDone>=myTotal) perfect = true;
