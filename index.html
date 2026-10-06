@@ -473,7 +473,9 @@ function load(){
     if(!s.config.nickH || s.config.nickH==="老公") s.config.nickH = "宏宏";
     if(!s.config.nickW || s.config.nickW==="老婆") s.config.nickW = "漫漫";
     s.dayOffset = 0;
-    return s;
+    var st = s;
+    st.viewAs = st.config.me || "husband";
+    return st;
   }catch(e){
     return {items:JSON.parse(JSON.stringify(DEFAULT_ITEMS)), checks:{}, pending:[],
             config:{me:"", nickH:"宏宏", nickW:"漫漫", gist:unb(BUILTIN.g), token:unb(BUILTIN.t), qualLine:10}, dayOffset:0};
@@ -501,12 +503,14 @@ function myName(){ return state.config.me==="wife" ? state.config.nickW||"老婆
 function nameOf(who){ return who==="wife" ? state.config.nickW||"老婆" : state.config.nickH||"老公"; }
 
 function render(){
-  // header
-  var me = state.config.me || "husband";
+  // header：viewAs = 当前查看视角；config.me = 这台手机的固定身份
+  var deviceMe = state.config.me || "husband";
+  var me = state.viewAs || deviceMe;
+  var canCheck = (me === deviceMe);
   var b = $("meBadge"); b.className = "badge " + (me==="wife"?"w":"h");
-  $("meName").textContent = myName();
-  $("hNick").textContent = state.config.nickH||"老公";
-  $("wNick").textContent = state.config.nickW||"老婆";
+  $("meName").textContent = nameOf(me);
+  $("hNick").textContent = state.config.nickH||"宏宏";
+  $("wNick").textContent = state.config.nickW||"漫漫";
 
   // 当前浏览的打卡日（逻辑今天 + 偏移）
   var base = parseD(logicTodayStr());
@@ -533,7 +537,7 @@ function render(){
     else if(theirs) cls += " theirs";
     if(locked) cls += " locked";
     var box = mine ? "✓" : (theirs ? "✓" : "");
-    html += "<div class='"+cls+"' data-d='"+ds+"' data-i='"+it.id+"'>"+
+    html += "<div class='"+cls+"' data-d='"+ds+"' data-i='"+it.id+"' data-can='"+(canCheck?"1":"0")+"'>"+
       "<div class='dem'>"+(it.emoji||"📌")+"</div>"+
       "<div class='dname'><span class='nm'>"+esc(it.name)+"</span></div>"+
       "<div class='dbox'>"+box+"</div></div>";
@@ -862,15 +866,19 @@ $("nextW").onclick = function(){
 };
 $("weekLabel").onclick = function(){ state.dayOffset=0; render(); };
 $("meBadge").onclick = function(){
-  var me = state.config.me==="wife" ? "wife" : "husband";
-  var other = me==="wife" ? "husband" : "wife";
-  state.config.me = other; save(); render();
-  toastMsg("已切换为「"+myName()+"」的视角（这台手机的身份可在⚙里改）");
+  state.viewAs = (state.viewAs==="wife") ? "husband" : "wife";
+  render();
+  if(state.viewAs === (state.config.me||"husband")){
+    toastMsg("已切回自己的打卡页");
+  }else{
+    toastMsg("正在观看「"+nameOf(state.viewAs)+"」的打卡（只能看，不能帮打）");
+  }
 };
 $("dayList").onclick = function(e){
   var row = e.target.closest("div.dayrow");
   if(!row || !row.getAttribute("data-d")) return;
   if(row.classList.contains("locked")){ toastMsg("凌晨 4 点后，前一天及更早的打卡就不能改啦"); return; }
+  if(row.getAttribute("data-can")!=="1"){ toastMsg("这是对方的页面，只能观看，不能帮打卡哦"); return; }
   toggle(row.getAttribute("data-d"), row.getAttribute("data-i"));
 };
 $("syncFab").onclick = function(){
@@ -913,8 +921,9 @@ $("testConn").onclick = async function(){
 document.querySelectorAll("#setSheet .idopt").forEach(function(el){
   el.onclick = function(){
     state.config.me = el.getAttribute("data-id");
-    state.config.nickH = $("nickH").value.trim()||"老公";
-    state.config.nickW = $("nickW").value.trim()||"老婆";
+    state.viewAs = state.config.me;
+    state.config.nickH = $("nickH").value.trim()||"宏宏";
+    state.config.nickW = $("nickW").value.trim()||"漫漫";
     save(); render(); renderSettings();
   };
 });
@@ -977,6 +986,7 @@ document.querySelectorAll("#setup .idopt").forEach(function(el){
 $("suStart").onclick = function(){
   var sel = document.querySelector("#setup .idopt.on");
   state.config.me = sel ? sel.getAttribute("data-id") : "husband";
+  state.viewAs = state.config.me;
   save();
   $("setup").classList.remove("show");
   render();
@@ -1026,7 +1036,7 @@ function computeMyStats(who){
 }
 
 function renderMe(){
-  var me = state.config.me==="wife" ? "wife" : "husband";
+  var me = state.viewAs || state.config.me || "husband";
   var nick = me==="wife" ? (state.config.nickW||"漫漫") : (state.config.nickH||"宏宏");
   var ql = state.config.qualLine||10;
   $("meAvatar").textContent = me==="wife" ? "👩" : "👨";
