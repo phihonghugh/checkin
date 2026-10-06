@@ -43,6 +43,10 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onRestart() {
+        super.onRestart();
+        if (web != null) web.reload();
+    }
     public void onBackPressed() {
         if (web != null && web.canGoBack()) {
             web.goBack();
