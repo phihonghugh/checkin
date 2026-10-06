@@ -48,7 +48,7 @@ jobs:
 
           for who in ("husband", "wife"):
               conf = notify.get(who) or {}
-              tk = conf.get("pushToken") or ""
+              tk = (conf.get("pushToken") or "").strip()
               if not tk:
                   print(names[who], ": no push token, skip")
                   continue
@@ -78,14 +78,24 @@ jobs:
               else:
                   title = "☀️ 早上好 " + name + "！今天有 " + str(total) + " 项打卡"
                   body = "新的一天从打卡开始，晚上 9 点会提醒你未完成的项目。加油！"
-              payload = None
+
+              content = title + "\n" + body
               if tk.startswith("SCT"):
-                  # Server酱（免费，每天 5 条）
+                  # Server酱
                   import urllib.parse
-                  body = urllib.parse.urlencode({"title": title, "desp": body}).encode()
-                  r2 = urllib.request.Request("https://sctapi.ftqq.com/" + tk + ".send", data=body)
+                  form = urllib.parse.urlencode({"title": title, "desp": body}).encode()
+                  r2 = urllib.request.Request("https://sctapi.ftqq.com/" + tk + ".send", data=form)
+              elif tk.startswith("AT_"):
+                  # WxPusher：填 AT_应用token|UID_用户（竖线分隔）
+                  parts = tk.split("|")
+                  pl = {"appToken": parts[0].strip(), "content": content,
+                        "summary": title[:99], "contentType": 1}
+                  if len(parts) > 1 and parts[1].strip():
+                      pl["uids"] = [parts[1].strip()]
+                  r2 = urllib.request.Request("https://wxpusher.zjiecode.com/api/send/message",
+                      data=json.dumps(pl).encode(), headers={"Content-Type": "application/json"})
               else:
-                  # PushPlus
+                  # PushPlus（需要实名+3.9，不推荐）
                   pl = json.dumps({"token": tk, "title": title, "content": body, "template": "txt"}).encode()
                   r2 = urllib.request.Request("https://www.pushplus.plus/send", data=pl,
                       headers={"Content-Type": "application/json"})
