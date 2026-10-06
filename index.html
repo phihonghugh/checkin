@@ -226,7 +226,8 @@
   <p class="hint" id="localHint" style="display:none">当前为<b>本地试用模式</b>（数据只存在本机）。和另一半同步请点右上角 ⚙ 填入「云同步」配置。</p>
 </div>
 
-<div class="fab" id="fab">⚙</div>
+  <div class="fab" id="syncFab" title="同步" style="bottom:calc(76px + env(safe-area-inset-bottom))">🔄</div>
+  <div class="fab" id="fab">⚙</div>
 
 <!-- ===== 设置抽屉 ===== -->
 <div class="mask" id="mask"></div>
@@ -661,6 +662,7 @@ function applyRemote(remote){
 async function pullSilent(){
   if(!hasCfg() || syncing) return;
   syncing=true; setDot("busy");
+  var hadPending = state.pending.length > 0;
   try{
     var r = await fetch("https://api.github.com/gists/"+state.config.gist, {headers:ghHeaders()});
     if(r.status===401||r.status===403){ setDot("err"); toastMsg("Token 无效或没勾 gist 权限"); return; }
@@ -680,7 +682,7 @@ async function pullSilent(){
     state.config.lastSync = Date.now();
     state.pending = [];
     save(); render(); setDot("ok");
-    if(grew){ schedulePush(); }
+    if(grew || hadPending){ schedulePush(); }
   }catch(e){
     setDot("err"); toastMsg("同步失败，先用本地数据（联网后自动重试）");
   }finally{ syncing=false; }
@@ -822,6 +824,10 @@ $("dayList").onclick = function(e){
   if(!row || !row.getAttribute("data-d")) return;
   if(row.classList.contains("locked")){ toastMsg("凌晨 4 点后，前一天及更早的打卡就不能改啦"); return; }
   toggle(row.getAttribute("data-d"), row.getAttribute("data-i"));
+};
+$("syncFab").onclick = function(){
+  toastMsg("正在同步更新…");
+  setTimeout(function(){ location.reload(); }, 350);
 };
 $("fab").onclick = function(){ openSheet("setSheet"); };
 $("setClose").onclick = function(){ closeSheet("setSheet"); };
