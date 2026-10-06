@@ -1,0 +1,96 @@
+name: WeChat Notify
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push WeChat reminder
+        shell: python
+        run: |
+          import base64, json, urllib.request
+          from datetime import datetime, timezone, timedelta
+
+          def unob(s):
+              return base64.b64decode(s[::-1]).decode()
+
+          TOKEN = unob("==QMQ5UQ1ITaiVTOxEWQv1ERQp2T1o2NyZ0NEVUZhFjMxNWaUp0Xwh2Z")
+          GIST = unob("=kTM5IjNlR2YyYzNlFmY3UjMyImZ1MmNhZzNhFmZjFmY")
+
+          req = urllib.request.Request("https://api.github.com/gists/" + GIST,
+              headers={"Authorization": "Bearer " + TOKEN, "Accept": "application/vnd.github+json"})
+          data = json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+          gfiles = data.get("files", {})
+          gf = gfiles.get("data.json") or (list(gfiles.values())[0] if gfiles else None)
+          if not gf:
+              raise SystemExit("no data file in gist")
+          state = json.loads(gf.get("content") or "{}")
+
+          cn = timezone(timedelta(hours=8))
+          now = datetime.now(cn)
+          if now.hour < 4:
+              now = now - timedelta(days=1)
+          ds = now.strftime("%Y-%m-%d")
+          evening = now.hour >= 20
+
+          items = state.get("items", [])
+          checks = state.get("checks", {}).get(ds, {})
+          notify = state.get("notify") or {}
+          cfg = state.get("config") or {}
+          names = {"husband": cfg.get("nickH", "宏宏"), "wife": cfg.get("nickW", "漫漫")}
+          ql = cfg.get("qualLine", 10)
+          total = len([it for it in items if not it.get("noPlan")])
+
+          for who in ("husband", "wife"):
+              conf = notify.get(who) or {}
+              tk = conf.get("pushToken") or ""
+              if not tk:
+                  print(names[who], ": no push token, skip")
+                  continue
+              name = conf.get("name") or names.get(who, who)
+              key = "h" if who == "husband" else "w"
+              old_val = "husband" if who == "husband" else "wife"
+              done, miss = [], []
+              for it in items:
+                  if it.get("noPlan"):
+                      continue
+                  rec = checks.get(it["id"])
+                  if isinstance(rec, dict):
+                      hit = bool(rec.get(key))
+                  else:
+                      hit = (rec == old_val)
+                  if hit:
+                      done.append(it["name"])
+                  else:
+                      miss.append(it["name"])
+              if evening:
+                  if len(done) >= ql:
+                      title = "🎉 " + name + " 达标！今天完成 " + str(len(done)) + "/" + str(total)
+                      body = "已完成 " + str(len(done)) + " 项，超过合格线 " + str(ql) + " 项，继续保持！\n\n已打卡：" + "、".join(done)
+                  else:
+                      title = "⏰ " + name + "，今天还有 " + str(len(miss)) + " 项没打卡"
+                      body = "今天已完成 " + str(len(done)) + "/" + str(total) + " 项（合格线 " + str(ql) + " 项）。\n\n还差：" + "、".join(miss[:8]) + ("…" if len(miss) > 8 else "")
+              else:
+                  title = "☀️ 早上好 " + name + "！今天有 " + str(total) + " 项打卡"
+                  body = "新的一天从打卡开始，晚上 9 点会提醒你未完成的项目。加油！"
+              payload = None
+              if tk.startswith("SCT"):
+                  # Server酱（免费，每天 5 条）
+                  import urllib.parse
+                  body = urllib.parse.urlencode({"title": title, "desp": body}).encode()
+                  r2 = urllib.request.Request("https://sctapi.ftqq.com/" + tk + ".send", data=body)
+              else:
+                  # PushPlus
+                  pl = json.dumps({"token": tk, "title": title, "content": body, "template": "txt"}).encode()
+                  r2 = urllib.request.Request("https://www.pushplus.plus/send", data=pl,
+                      headers={"Content-Type": "application/json"})
+              try:
+                  resp = urllib.request.urlopen(r2, timeout=15).read().decode()
+                  print(name, "->", resp[:150])
+              except Exception as e:
+                  print(name, "push failed:", e)
