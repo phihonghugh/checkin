@@ -72,6 +72,10 @@
   td.cell.who .box{border-style:dashed; border-color:#c9c9d2; background:#fafafa; color:#b0b0ba; font-size:11px; font-weight:600}
   .legend{display:flex; gap:14px; padding:8px 14px; font-size:11px; color:var(--sub); background:#fbfbfc; border-top:1px solid var(--line)}
   .legend b{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px}
+  .chart-head{font-size:13px; font-weight:700; padding:11px 14px 0; display:flex; justify-content:space-between; align-items:baseline}
+  .chart-head small{font-weight:500; color:var(--sub); font-size:11px}
+  .chart-wrap{padding:4px 8px 6px}
+  .chart-wrap svg{width:100%; height:auto; display:block}
 
   /* ===== fab ===== */
   .fab{position:fixed; right:16px; bottom:calc(18px + env(safe-area-inset-bottom)); width:46px; height:46px; border-radius:50%;
@@ -181,6 +185,15 @@
       <span style="margin-left:auto">点格子打卡</span>
     </div>
   </div>
+  <div class="tablecard" style="margin-top:10px">
+    <div class="chart-head">📈 最近 8 周完成率 <small>%</small></div>
+    <div class="chart-wrap"><svg id="trend" viewBox="0 0 352 170" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div class="legend">
+      <span><b style="background:var(--blue)"></b>老公</span>
+      <span><b style="background:var(--pink)"></b>老婆</span>
+      <span style="margin-left:auto">横轴为每周一</span>
+    </div>
+  </div>
   <p class="hint" id="localHint" style="display:none">当前为<b>本地试用模式</b>（数据只存在本机）。和另一半同步请点右上角 ⚙ 填入「云同步」配置。</p>
 </div>
 
@@ -277,6 +290,7 @@ var DEFAULT_ITEMS = [
   {id:"hus_slp", emoji:"😴", name:"老公早睡",     who:"husband", days:null},
   {id:"wife_slp",emoji:"🌙", name:"老婆早睡",     who:"wife",    days:null},
   {id:"folic",   emoji:"💊", name:"老婆叶酸400μg",who:"wife",    days:null},
+  {id:"hus_folic", emoji:"💊", name:"老公叶酸400μg",who:"husband", days:null},
   {id:"hus_nosmoke", emoji:"🚭", name:"老公不烟酒", who:"husband", days:null},
   {id:"wife_nosmoke",emoji:"🚭", name:"老婆不烟酒", who:"wife",    days:null},
   {id:"tea",     emoji:"🧋", name:"奶茶控制",     who:"both",    days:null},
@@ -300,10 +314,22 @@ function unb(s){ try{ return atob(s.split("").reverse().join("")); }catch(e){ re
 
 var state = load();
 
+function migrateItems(items){
+  var has = false;
+  for(var i=0;i<items.length;i++) if(items[i].id==="hus_folic"){ has=true; break; }
+  if(has) return false;
+  var at = -1;
+  for(var j=0;j<items.length;j++) if(items[j].id==="folic"){ at=j; break; }
+  var it = {id:"hus_folic", emoji:"💊", name:"老公叶酸400μg", who:"husband", days:null};
+  if(at>=0) items.splice(at+1,0,it); else items.push(it);
+  return true;
+}
+
 function load(){
   try{
     var s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
     if(!s.items || !s.items.length){ s.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS)); }
+    else { migrateItems(s.items); }
     s.checks = s.checks || {};
     s.pending = s.pending || [];
     s.config = s.config || {me:"", nickH:"老公", nickW:"老婆", gist:"", token:""};
@@ -382,29 +408,66 @@ function render(){
   html += "</tbody>";
   $("tbl").innerHTML = html;
   renderStats(dates);
+  renderTrend();
   renderLocalHint();
 }
 
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
 
-function renderStats(dates){
+function computeWeek(dates){
   var cnt = {husband:[0,0], wife:[0,0]};
   for(var i=0;i<7;i++){
-    var d=dates[i], ds=dstr(d), wd=d.getDay(), day=state.checks[ds]||{};
+    var ds=dstr(dates[i]), wd=dates[i].getDay(), day=state.checks[ds]||{};
     for(var j=0;j<state.items.length;j++){
       var it=state.items[j];
       if(it.days && it.days.indexOf(wd)<0) continue;
-      if(it.who!=="both") cnt[it.who][1]++;
-      else { cnt.husband[1]++; cnt.wife[1]++; }
-      if(day[it.id]){ cnt.husband[0]++; cnt.wife[0]++; }
+      var done = day[it.id];
+      if(done){ cnt[done][0]++; }
+      else if(it.who==="both"){ cnt.husband[1]++; cnt.wife[1]++; }
+      else { cnt[it.who][1]++; }
     }
   }
+  return cnt;
+}
+
+function renderStats(dates){
+  var cnt = computeWeek(dates);
   [["husband","hPct","hNum","hBar"],["wife","wPct","wNum","wBar"]].forEach(function(p){
     var k=p[0], done=cnt[k][0], total=cnt[k][1];
     var pct = total? Math.round(done*100/total) : 0;
     $(p[1]).textContent = pct+"%"; $(p[2]).textContent = done+"/"+total;
     $(p[3]).style.width = pct+"%";
   });
+}
+
+function renderTrend(){
+  var W=352, H=170, L=34, R=12, T=12, B=26;
+  var plotW=W-L-R, plotH=H-T-B, N=8;
+  var series={husband:[], wife:[]}, labels=[];
+  for(var k=N-1;k>=0;k--){
+    var dates=weekDates(-k), c=computeWeek(dates);
+    series.husband.push(c.husband[1]? Math.round(c.husband[0]*100/c.husband[1]) : 0);
+    series.wife.push(c.wife[1]? Math.round(c.wife[0]*100/c.wife[1]) : 0);
+    labels.push((dates[0].getMonth()+1)+"/"+dates[0].getDate());
+  }
+  function X(i){ return L + plotW*i/(N-1); }
+  function Y(p){ return T + plotH*(1-p/100); }
+  var s="";
+  [0,25,50,75,100].forEach(function(p){
+    s += "<line x1='"+L+"' y1='"+Y(p)+"' x2='"+(W-R)+"' y2='"+Y(p)+"' stroke='#ececf0' stroke-width='1'/>";
+    s += "<text x='"+(L-5)+"' y='"+(Y(p)+3)+"' font-size='9' fill='#b5b5bf' text-anchor='end'>"+p+"</text>";
+  });
+  [["husband","#4a7fd4"],["wife","#e0709c"]].forEach(function(cfg){
+    var arr=series[cfg[0]];
+    s += "<polyline points='"+arr.map(function(p,i){ return X(i)+","+Y(p); }).join(" ")+"' fill='none' stroke='"+cfg[1]+"' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'/>";
+    arr.forEach(function(p,i){ s += "<circle cx='"+X(i)+"' cy='"+Y(p)+"' r='3' fill='"+cfg[1]+"'/>"; });
+    var last=arr[N-1];
+    s += "<text x='"+(W-R)+"' y='"+(Y(last)-6)+"' font-size='9' font-weight='700' fill='"+cfg[1]+"' text-anchor='end'>"+last+"</text>";
+  });
+  labels.forEach(function(lb,i){
+    s += "<text x='"+X(i)+"' y='"+(H-8)+"' font-size='9' fill='#8a8a96' text-anchor='middle'>"+lb+"</text>";
+  });
+  $("trend").innerHTML = s;
 }
 
 function renderLocalHint(){
@@ -450,6 +513,7 @@ function setDot(cls){ $("syncDot").className = "dot "+(cls||""); }
 
 function applyRemote(remote){
   var items = (remote.items && remote.items.length) ? remote.items : state.items;
+  var grew = migrateItems(items);
   // 本地未同步的 pending 优先
   var checks = {};
   var rc = remote.checks || {};
@@ -462,6 +526,7 @@ function applyRemote(remote){
     if(op.by) checks[op.d][op.i]=op.by; else delete checks[op.d][op.i];
   });
   state.items = items; state.checks = checks;
+  return grew;
 }
 
 async function pullSilent(){
@@ -479,9 +544,10 @@ async function pullSilent(){
     var remote = {};
     try{ remote = JSON.parse(f.content||"{}"); }catch(e){}
     state.config.gistFile = fname; save();
-    applyRemote(remote);
+    var grew = applyRemote(remote);
     state.pending = [];
     save(); render(); setDot("ok");
+    if(grew){ schedulePush(); }
   }catch(e){
     setDot("err"); toastMsg("同步失败，先用本地数据（联网后自动重试）");
   }finally{ syncing=false; }
