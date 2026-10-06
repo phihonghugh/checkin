@@ -682,17 +682,22 @@ async function pullSilent(){
     state.config.lastSync = Date.now();
     state.pending = [];
     save(); render(); setDot("ok");
-    if(grew || hadPending){ schedulePush(); }
+    if(grew || hadPending){ setTimeout(function(){ push(true); }, 200); }
   }catch(e){
     setDot("err"); toastMsg("同步失败，先用本地数据（联网后自动重试）");
   }finally{ syncing=false; }
 }
 
 var pushTimer=null;
-function schedulePush(){ clearTimeout(pushTimer); pushTimer=setTimeout(push, 900); }
+function schedulePush(force){
+  clearTimeout(pushTimer);
+  if(force){ push(true); return; }
+  pushTimer=setTimeout(function(){ push(false); }, 900);
+}
 
-async function push(){
-  if(!hasCfg() || syncing || !state.pending.length){ if(hasCfg()) setDot("ok"); return; }
+async function push(force){
+  if(!hasCfg() || syncing) return;
+  if(!force && !state.pending.length){ setDot("ok"); return; }
   syncing=true; setDot("busy");
   try{
     // 先取远端最新，合并后写回（gist 是 last-write-wins，窗口极小）
@@ -845,8 +850,9 @@ $("saveSync").onclick = function(){
   if(pw) state.config.notify.wife = {pushToken:pw, name:state.config.nickW};
   save(); renderLocalHint();
   toastMsg("已保存，正在同步…");
-  pullSilent();
-  schedulePush();
+  pullSilent().then(function(){
+    setTimeout(function(){ push(true); }, 150);
+  });
 };
 $("testConn").onclick = async function(){
   var g=$("gistId").value.trim(), t=$("token").value.trim();
@@ -876,6 +882,7 @@ $("qualLineIn").onchange = function(){
     state.config.qualLine = v; save(); renderTrend(); render();
     $("qlShow").textContent = v;
     toastMsg("每日合格线已设为 "+v+" 项");
+    schedulePush(true);
   } else {
     toastMsg("填 1~50 之间的数字");
   }
@@ -887,7 +894,7 @@ $("itemList").onclick = function(e){
   if(b.hasAttribute("data-del")){
     var idx=+b.getAttribute("data-del");
     if(confirm("删除「"+state.items[idx].name+"」？历史打卡记录会保留。")){
-      state.items.splice(idx,1); save(); schedulePush(); renderSettings(); render();
+      state.items.splice(idx,1); save(); schedulePush(true); renderSettings(); render();
     }
   }
 };
@@ -907,7 +914,7 @@ $("ieSave").onclick = function(){
            emoji:$("ieEmoji").value.trim()||"📌", name:name,
            who:$("ieWho").value, days: tmpDays.length? tmpDays.slice().sort() : null };
   if(editing>=0) state.items[editing]=it; else state.items.push(it);
-  save(); schedulePush(); closeSheet("itemSheet"); render(); renderSettings();
+  save(); schedulePush(true); closeSheet("itemSheet"); render(); renderSettings();
 };
 
 $("wipeLocal").onclick = function(){
