@@ -130,6 +130,7 @@
   .mpub textarea{width:100%; min-height:64px; border:none; resize:none; font-size:14px; outline:none;
     background:transparent; font-family:inherit; color:var(--txt); line-height:1.5}
   .mbar{display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid var(--line)}
+  .mpub textarea{font-size:15px}
   .moment{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px}
   .moment .mh{display:flex; gap:9px; align-items:center; margin-bottom:6px}
   .moment .mav{width:36px; height:36px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:19px; flex:none}
@@ -141,7 +142,7 @@
   .moment .mdel{font-size:11px; color:var(--sub); cursor:pointer}
   #momPrev img{width:110px; border-radius:8px; margin:8px 6px 0 0; display:inline-block}
   /* ===== fab ===== */
-  .fab{position:fixed; right:16px; bottom:calc(18px + env(safe-area-inset-bottom)); width:46px; height:46px; border-radius:50%;
+  .fab{position:fixed; right:16px; bottom:calc(72px + env(safe-area-inset-bottom)); width:46px; height:46px; border-radius:50%;
     background:var(--card); border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08); display:flex; align-items:center;
     justify-content:center; font-size:20px; cursor:pointer; z-index:30}
   .fab:active{transform:scale(.94)}
@@ -297,11 +298,10 @@
 
 <div id="view-moments" class="pageview hidden">
   <div class="ptitle">🌅 我们的小圈 <small style="font-weight:500;font-size:11px;color:var(--sub)">只有你们俩能看</small></div>
-  <div class="tablecard" style="padding:10px 14px;margin-bottom:12px">
+  <div style="padding:2px 6px 8px;margin-bottom:12px">
     <textarea id="momText" maxlength="1000" placeholder="写点什么吧——今天的心情、日记、想对她/他说的话…"></textarea>
     <div class="mbar">
       <label class="mini" for="momImg" style="cursor:pointer">📷 添加图片</label>
-      <input type="file" id="momImg" accept="image/*" style="display:none">
       <button id="momPub" class="btn primary" style="width:auto;height:36px;padding:0 18px">发布</button>
     </div>
     <div id="momPrev"></div>
@@ -316,7 +316,7 @@
   <div class="tab" data-t="moments"><span class="ti">🌅</span><span class="tl">小圈</span></div>
 </nav>
 
-  <div class="fab" id="syncFab" title="同步" style="bottom:calc(76px + env(safe-area-inset-bottom))">🔄</div>
+  <div class="fab" id="syncFab" title="同步" style="bottom:calc(130px + env(safe-area-inset-bottom))">🔄</div>
   <div class="fab" id="fab">⚙</div>
 
 <!-- ===== 设置抽屉 ===== -->
