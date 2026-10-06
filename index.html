@@ -154,6 +154,9 @@
   .badgecell.got .bn{color:var(--blue); font-weight:600}
   .kv{font-size:12.5px; color:var(--sub); line-height:2.1}
   .kv b{color:var(--txt); font-weight:600}
+  .ttabs{float:right; display:flex; gap:4px}
+  .ttab{font-size:11px; padding:3px 10px; border-radius:8px; background:#f2f2f5; color:var(--sub); cursor:pointer; user-select:none}
+  .ttab.on{background:var(--blue); color:#fff; font-weight:600}
   .su-card{max-width:430px; margin:34px auto; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:22px 20px}
   .su-card h1{font-size:20px; margin:0 0 4px; text-align:center}
   .su-card .sub{text-align:center; color:var(--sub); font-size:13px; margin-bottom:16px}
@@ -332,6 +335,21 @@
     <div class="badgegrid" id="badgeGrid"></div>
 
     <div class="sep"></div>
+    <div class="secttl">📊 趋势
+      <span class="ttabs">
+        <span class="ttab on" data-r="7">周</span>
+        <span class="ttab" data-r="30">月</span>
+        <span class="ttab" data-r="12">年</span>
+      </span>
+    </div>
+    <div class="chart-wrap"><svg id="meTrend" viewBox="0 0 352 170" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div class="legend">
+      <span><b style="background:var(--blue)"></b>宏宏</span>
+      <span><b style="background:var(--pink)"></b>漫漫</span>
+      <span id="meTrendHint" style="margin-left:auto">每日完成项数</span>
+    </div>
+
+    <div class="sep"></div>
     <div class="secttl">📊 打卡数据</div>
     <div class="kv" id="meStats"></div>
 
@@ -368,8 +386,8 @@ var DEFAULT_ITEMS = [
   {id:"nosweet", emoji:"🍬", name:"少甜食",       who:"both",    days:null},
   {id:"nodrink", emoji:"🥤", name:"少含糖饮料",   who:"both",    days:null},
   {id:"nosit",   emoji:"🛋️", name:"不久坐",       who:"both",    days:null},
-  {id:"ovu",     emoji:"🧪", name:"排卵试纸",     who:"wife",    days:null},
-  {id:"sex",     emoji:"❤️", name:"同房",         who:"both",    days:null}
+  {id:"ovu",     emoji:"🧪", name:"排卵试纸",     who:"wife",    days:null, noPlan:true},
+  {id:"sex",     emoji:"❤️", name:"同房",         who:"both",    days:null, noPlan:true}
 ];
 
 /* 云同步配置（混淆存放，应用启动时解出） */
@@ -411,6 +429,10 @@ function migrateItems(items){
   // 4) 所有项目每天都能勾（去掉星期几限制）
   items.forEach(function(x){
     if(x.days){ x.days = null; changed = true; }
+  });
+  // 5) 同房/排卵试纸不计入每日计划
+  items.forEach(function(x){
+    if((x.id==="ovu" || x.id==="sex") && !x.noPlan){ x.noPlan = true; changed = true; }
   });
   return changed;
 }
@@ -509,12 +531,16 @@ function computeDay(ds){
   var day = state.checks[ds] || {};
   for(var j=0;j<state.items.length;j++){
     var it=state.items[j];
+    if(it.noPlan) continue; // 同房/排卵试纸：只记录，不占计划
     // 计划数：每天固定
     if(it.who==="both"){ cnt.husband[1]++; cnt.wife[1]++; }
     else cnt[it.who][1]++;
-    // 完成数：谁打的算谁
+    // 完成数：专属项目永远归项目主人（代打也算主人的），共用项目谁打的算谁
     var done = day[it.id];
-    if(done){ cnt[done][0]++; }
+    if(done){
+      if(it.who==="both") cnt[done][0]++;
+      else cnt[it.who][0]++;
+    }
   }
   return cnt;
 }
@@ -536,8 +562,9 @@ function renderTrend(){
   var W=352, H=170, L=34, R=14, T=12, B=26;
   var plotW=W-L-R, plotH=H-T-B, N=14;
   var ql = state.config.qualLine||10;
-  var total = state.items.length;
-  var yMax = Math.max(total, ql+2);
+  var planTotal = 0;
+  state.items.forEach(function(x){ if(!x.noPlan) planTotal++; });
+  var yMax = Math.max(planTotal, ql+2);
   var series={husband:[], wife:[]}, labels=[];
   var base = parseD(logicTodayStr());
   for(var k=N-1;k>=0;k--){
@@ -935,10 +962,13 @@ function computeMyStats(who){
     var myDone = 0, myTotal = 0;
     for(var i=0;i<state.items.length;i++){
       var it = state.items[i];
-      if(it.who==="both"){ myTotal++; }
-      else if(it.who===who){ myTotal++; }
+      if(it.noPlan) continue;
+      if(it.who==="both" || it.who===who){ myTotal++; }
       var r = day[it.id];
-      if(r && r===who){ done++; myDone++; }
+      if(r){
+        var owner = (it.who==="both") ? r : it.who;
+        if(owner===who){ done++; myDone++; }
+      }
     }
     if(myTotal>0 && myDone>=myTotal) perfect = true;
   }
@@ -991,7 +1021,91 @@ function renderMe(){
     "打卡日切分：<b>凌晨 4 点</b> · 历史打卡：<b>锁定</b>";
 }
 
-$("meBtn").onclick = function(){ renderMe(); $("mePage").classList.add("show"); };
+var meRange = 7; // 我的页趋势范围：7=周 30=月 12=年
+
+function drawMeTrend(){
+  var W=352, H=170, L=34, R=14, T=12, B=26;
+  var plotW=W-L-R, plotH=H-T-B;
+  var ql = state.config.qualLine||10;
+  var planTotal = 0;
+  state.items.forEach(function(x){ if(!x.noPlan) planTotal++; });
+  var series={husband:[], wife:[]}, labels=[], yMax, hint;
+  var base = parseD(logicTodayStr());
+  var i, k, d, c;
+
+  if(meRange===12){
+    // 年视图：最近 12 个月，每月达标天数
+    yMax = 31; hint = "每月达标天数";
+    var now = new Date();
+    for(k=11;k>=0;k--){
+      var m0 = new Date(now.getFullYear(), now.getMonth()-k, 1);
+      var m1 = new Date(m0.getFullYear(), m0.getMonth()+1, 1);
+      var ch=0, cw=0;
+      for(d=new Date(m0); d<m1; d.setDate(d.getDate()+1)){
+        c = computeDay(dstr(d));
+        if(c.husband[1]>0 && c.husband[0]>=ql) ch++;
+        if(c.wife[1]>0 && c.wife[0]>=ql) cw++;
+      }
+      series.husband.push(ch); series.wife.push(cw);
+      labels.push((m0.getMonth()+1)+"月");
+    }
+  } else {
+    // 周/月视图：最近 7/30 天每日完成项数
+    var n = meRange;
+    yMax = Math.max(planTotal, ql+2);
+    hint = "每日完成项数";
+    for(k=n-1;k>=0;k--){
+      d = new Date(base); d.setDate(d.getDate()-k);
+      c = computeDay(dstr(d));
+      series.husband.push(c.husband[0]); series.wife.push(c.wife[0]);
+      labels.push((d.getMonth()+1)+"/"+d.getDate());
+    }
+  }
+
+  function X(i){ return L + plotW*i/(labels.length-1); }
+  function Y(v){ return T + plotH*(1-v/yMax); }
+  var s="";
+  var step = yMax>40 ? 10 : (yMax>20 ? 5 : 2);
+  for(var v=0; v<=yMax; v+=step){
+    s += "<line x1='"+L+"' y1='"+Y(v)+"' x2='"+(W-R)+"' y2='"+Y(v)+"' stroke='#ececf0' stroke-width='1'/>";
+    s += "<text x='"+(L-5)+"' y='"+(Y(v)+3)+"' font-size='9' fill='#b5b5bf' text-anchor='end'>"+v+"</text>";
+  }
+  if(meRange!==12){
+    var qy = Y(ql);
+    s += "<line x1='"+L+"' y1='"+qy+"' x2='"+(W-R)+"' y2='"+qy+"' stroke='#c9962e' stroke-width='1.5' stroke-dasharray='5 4'/>";
+  }
+  [["husband","#4a7fd4"],["wife","#e0709c"]].forEach(function(cfg){
+    var arr=series[cfg[0]];
+    s += "<polyline points='"+arr.map(function(v,i){ return X(i)+","+Y(v); }).join(" ")+"' fill='none' stroke='"+cfg[1]+"' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'/>";
+    var skip = labels.length>20 ? 2 : 1;
+    arr.forEach(function(v,i){
+      if(i%skip!==0 && i!==arr.length-1) return;
+      var ok = meRange!==12 ? (v>=ql) : true;
+      s += "<circle cx='"+X(i)+"' cy='"+Y(v)+"' r='2.8' fill='"+(ok?cfg[1]:"#c9c9d2")+"' stroke='"+cfg[1]+"' stroke-width='1'/>";
+    });
+    var last=arr[arr.length-1];
+    s += "<text x='"+(W-R)+"' y='"+(Y(last)-6)+"' font-size='9' font-weight='700' fill='"+cfg[1]+"' text-anchor='end'>"+last+"</text>";
+  });
+  var lbStep = labels.length>20 ? 5 : (labels.length>10 ? 2 : 1);
+  labels.forEach(function(lb,i){
+    if(i%lbStep===0 || i===labels.length-1){
+      s += "<text x='"+X(i)+"' y='"+(H-8)+"' font-size='8.5' fill='#8a8a96' text-anchor='middle'>"+lb+"</text>";
+    }
+  });
+  $("meTrend").innerHTML = s;
+  $("meTrendHint").textContent = hint;
+}
+
+document.querySelectorAll(".ttab").forEach(function(el){
+  el.onclick = function(){
+    document.querySelectorAll(".ttab").forEach(function(x){ x.classList.remove("on"); });
+    el.classList.add("on");
+    meRange = parseInt(el.getAttribute("data-r"), 10);
+    drawMeTrend();
+  };
+});
+
+$("meBtn").onclick = function(){ renderMe(); drawMeTrend(); $("mePage").classList.add("show"); };
 $("meClose").onclick = function(){ $("mePage").classList.remove("show"); };
 
 /* ================= 启动 ================= */
