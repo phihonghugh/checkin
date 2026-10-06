@@ -172,6 +172,7 @@
   .idopt.on.h{border-color:var(--blue); background:var(--blue-bg); color:var(--blue)}
   .idopt.on.w{border-color:var(--pink); background:var(--pink-bg); color:var(--pink)}
   .idopt span{font-size:20px}
+  .idopt .occ{display:block; font-size:10px; color:#c94c42; font-weight:500; margin-top:2px}
   .toast{position:fixed; left:50%; bottom:calc(80px + env(safe-area-inset-bottom)); transform:translateX(-50%);
     background:#33333d; color:#fff; font-size:13px; padding:9px 16px; border-radius:20px; z-index:99; display:none; max-width:80vw; text-align:center}
   .empty-tips{padding:16px; text-align:center; color:var(--sub); font-size:13px; line-height:1.8}
@@ -243,8 +244,8 @@
       <div class="field"><label>（漫漫昵称）</label><input id="nickW" placeholder="漫漫"></div>
     </div>
     <div class="idpick">
-      <div class="idopt h" data-id="husband"><span>👨</span>这台手机是老公的</div>
-      <div class="idopt w" data-id="wife"><span>👩</span>这台手机是老婆的</div>
+      <div class="idopt h" data-id="husband"><span>👨</span>这台手机是宏宏的<small class="occ" id="occH"></small></div>
+      <div class="idopt w" data-id="wife"><span>👩</span>这台手机是漫漫的<small class="occ" id="occW"></small></div>
     </div>
 
     <div class="sep"></div>
@@ -469,6 +470,9 @@ function load(){
     if(!s.config.gist){ s.config.gist = unb(BUILTIN.g); s.config.token = unb(BUILTIN.t); }
     if(!s.config.qualLine) s.config.qualLine = 10;
     if(!s.config.notify) s.config.notify = {};
+    // 设备指纹：用于身份互斥（一台设备占用一个身份）
+    if(!s.config.deviceId){ s.config.deviceId = "d"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+    s.devices = s.devices || {husband:null, wife:null};
     // 昵称迁移：仍是旧默认“老公/老婆”的自动换成宏宏/漫漫（手动改过的不动）
     if(!s.config.nickH || s.config.nickH==="老公") s.config.nickH = "宏宏";
     if(!s.config.nickW || s.config.nickW==="老婆") s.config.nickW = "漫漫";
@@ -482,7 +486,7 @@ function load(){
   }
 }
 function save(){
-  var s = {items:state.items, checks:state.checks, pending:state.pending, config:state.config};
+  var s = {items:state.items, checks:state.checks, pending:state.pending, config:state.config, devices:state.devices};
   try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(e){}
 }
 
@@ -703,6 +707,7 @@ function applyRemote(remote){
     if(Object.keys(m).length) checks[op.d][op.i]=m; else delete checks[op.d][op.i];
   });
   state.items = items; state.checks = checks;
+  if(remote.devices){ state.devices = remote.devices; }
   return grew;
 }
 
@@ -769,7 +774,8 @@ async function push(force){
         ["husband","wife"].forEach(function(k){ m[k] = ln[k] || rn[k] || null; });
         return m;
       })(),
-      config: {nickH: state.config.nickH||"宏宏", nickW: state.config.nickW||"漫漫", qualLine: state.config.qualLine||10}
+      config: {nickH: state.config.nickH||"宏宏", nickW: state.config.nickW||"漫漫", qualLine: state.config.qualLine||10},
+      devices: state.devices || {}
     });
     var filesObj = {};
     if(fname !== "data.json"){ filesObj[fname] = {filename:"data.json", content:payload}; }
@@ -813,6 +819,11 @@ function renderSettings(){
   var n = state.config.notify || {};
   $("pushH").value = (n.husband && n.husband.pushToken) || "";
   $("pushW").value = (n.wife && n.wife.pushToken) || "";
+  // 身份互斥：另一台手机已占用的身份打上标记
+  var dev = state.devices || {};
+  var myId = state.config.deviceId;
+  $("occH").textContent = (dev.husband && dev.husband!==myId) ? "⚠ 已被另一台手机占用" : "";
+  $("occW").textContent = (dev.wife && dev.wife!==myId) ? "⚠ 已被另一台手机占用" : "";
   document.querySelectorAll("#setSheet .idopt").forEach(function(el){
     el.classList.toggle("on", el.getAttribute("data-id")===(state.config.me||"husband"));
   });
@@ -920,11 +931,22 @@ $("testConn").onclick = async function(){
 
 document.querySelectorAll("#setSheet .idopt").forEach(function(el){
   el.onclick = function(){
-    state.config.me = el.getAttribute("data-id");
+    var target = el.getAttribute("data-id");
+    var dev = state.devices || {};
+    var takenByOther = dev[target] && dev[target] !== state.config.deviceId;
+    if(takenByOther){
+      var ok = confirm("「"+nameOf(target)+"」的身份已经在另一台手机上启用了。\n\n确定把它转移到这台手机吗？原手机将不能再打卡。");
+      if(!ok) return;
+    }
+    state.config.me = target;
     state.viewAs = state.config.me;
+    state.devices = state.devices || {};
+    state.devices[target] = state.config.deviceId;
     state.config.nickH = $("nickH").value.trim()||"宏宏";
     state.config.nickW = $("nickW").value.trim()||"漫漫";
     save(); render(); renderSettings();
+    schedulePush(true);
+    if(takenByOther){ toastMsg("身份已转移到这台手机"); }
   };
 });
 
