@@ -209,10 +209,9 @@
   <div class="tablecard">
     <div id="dayList"></div>
     <div class="legend">
-      <span><b style="background:var(--blue)"></b>老公打的卡</span>
-      <span><b style="background:var(--pink)"></b>老婆打的卡</span>
-      <span><b style="background:#fafafa;border:1.5px dashed #c9c9d2;box-sizing:border-box"></b>对方负责</span>
-      <span style="margin-left:auto">点行打卡</span>
+      <span><b style="background:var(--blue)"></b>宏宏打的卡</span>
+      <span><b style="background:var(--pink)"></b>漫漫打的卡</span>
+      <span style="margin-left:auto">点行打卡 · 同房两人都可打</span>
     </div>
   </div>
   <div class="tablecard" style="margin-top:10px">
@@ -497,25 +496,19 @@ function render(){
   $("wl2").textContent = isToday ? "今天 · 点击回到今天" : (locked ? "历史记录 · 只能看" : "点击回到今天");
   $("qlShow").textContent = state.config.qualLine||10;
 
-  // 单日清单
+  // 单日清单：只显示自己的项目 + 共同项目（同房）
   var html = "";
   for(var r=0; r<state.items.length; r++){
     var it = state.items[r];
+    if(it.who!==me && it.who!=="both") continue;
     var rec = state.checks[ds] ? state.checks[ds][it.id] : null;
-    var mine = it.who==="both" || it.who===me;
     var cls = "dayrow";
     if(rec) cls += (rec==="wife" ? " done-w" : " done-h");
-    else if(!mine) cls += " off";
     if(locked) cls += " locked";
-    var whoTxt = it.who==="both" ? "共用" : nameOf(it.who);
-    var whoCls = it.who==="both" ? "b" : (it.who==="wife"?"w":"h");
-    var box;
-    if(rec) box = "✓";
-    else if(mine) box = "";
-    else box = nameOf(it.who).slice(0,1);
+    var box = rec ? "✓" : "";
     html += "<div class='"+cls+"' data-d='"+ds+"' data-i='"+it.id+"'>"+
       "<div class='dem'>"+(it.emoji||"📌")+"</div>"+
-      "<div class='dname'><span class='nm'>"+esc(it.name)+"</span><span class='who-chip "+whoCls+"'>"+whoTxt+"</span></div>"+
+      "<div class='dname'><span class='nm'>"+esc(it.name)+"</span></div>"+
       "<div class='dbox'>"+box+"</div></div>";
   }
   $("dayList").innerHTML = html;
