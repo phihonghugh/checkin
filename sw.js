@@ -1,5 +1,5 @@
 /* 夫妻打卡 service worker：外壳离线可用，GitHub API 永不缓存 */
-const CACHE = "cc-shell-v17";
+const CACHE = "cc-shell-v18";
 const SHELL = ["./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 

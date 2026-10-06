@@ -20,7 +20,7 @@
   html,body{margin:0; padding:0; background:var(--bg); color:var(--txt);
     font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
   body{padding-bottom:env(safe-area-inset-bottom)}
-  .wrap{max-width:760px; margin:0 auto; padding:0 10px 90px}
+  .wrap{max-width:760px; margin:0 auto; padding:0 10px 110px}
 
   /* ===== header ===== */
   header{position:sticky; top:0; z-index:20; background:linear-gradient(var(--bg) 82%,transparent);
@@ -94,6 +94,52 @@
   .dayrow.locked{opacity:.55; cursor:default}
   .dayrow.locked:active{background:transparent}
 
+  /* ===== 底部导航 ===== */
+  .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:35; background:#fff; border-top:1px solid var(--line);
+    display:flex; padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
+  .tab{flex:1; text-align:center; cursor:pointer; color:var(--sub); user-select:none}
+  .tab .ti{font-size:20px; display:block; line-height:1.25}
+  .tab .tl{font-size:10.5px}
+  .tab.on{color:var(--blue); font-weight:600}
+  .pageview{max-width:760px; margin:0 auto; padding:14px 10px 90px}
+  .ptitle{font-size:17px; font-weight:700; margin:6px 2px 12px}
+  .ptitle small{font-weight:500}
+  .hidden{display:none!important}
+  /* 记录 */
+  .logday{font-size:12px; color:var(--sub); padding:12px 14px 4px; font-weight:700}
+  .logrow{display:flex; gap:8px; padding:9px 14px; font-size:13px; border-bottom:1px dashed var(--line); align-items:center}
+  .logrow:last-child{border-bottom:none}
+  .logrow .lt{color:var(--sub); font-size:12px; flex:none; width:38px}
+  .logrow .lw{font-weight:600; flex:none}
+  .lw.h{color:var(--blue)} .lw.w{color:var(--pink)}
+  /* 聊天 */
+  #view-chat{display:flex; flex-direction:column; min-height:100vh; box-sizing:border-box; padding-bottom:80px}
+  #view-chat.hidden{display:none!important}
+  .chatbox{flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px;
+    background:var(--bg); border:none; min-height:50vh}
+  .bub{max-width:78%; padding:9px 12px; border-radius:14px; font-size:14px; line-height:1.55;
+    word-break:break-word; align-self:flex-start; background:#fff; border:1px solid var(--line); white-space:pre-wrap}
+  .bub.me{align-self:flex-end; background:var(--blue); color:#fff; border-color:var(--blue)}
+  .bub .bt{display:block; font-size:10px; opacity:.65; margin-top:3px}
+  .bub.me .bt{color:#dce8ff}
+  .chatbar{position:fixed; left:0; right:0; bottom:52px; display:flex; gap:8px; padding:8px 10px;
+    background:var(--card); border-top:1px solid var(--line); z-index:34; max-width:760px; margin:0 auto}
+  .chatbar input{flex:1; height:38px; border-radius:10px; border:1px solid var(--line); padding:0 10px; font-size:14px; background:#fbfbfc; color:var(--txt)}
+  .chatbar input:focus{outline:none; border-color:var(--blue)}
+  /* 小圈 */
+  .mpub textarea{width:100%; min-height:64px; border:none; resize:none; font-size:14px; outline:none;
+    background:transparent; font-family:inherit; color:var(--txt); line-height:1.5}
+  .mbar{display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid var(--line)}
+  .moment{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px}
+  .moment .mh{display:flex; gap:9px; align-items:center; margin-bottom:6px}
+  .moment .mav{width:36px; height:36px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:19px; flex:none}
+  .moment .mt1{flex:1}
+  .moment .mnick{font-size:13px; font-weight:700}
+  .moment .mtime{font-size:11px; color:var(--sub)}
+  .moment .mtext{font-size:14px; line-height:1.65; white-space:pre-wrap; word-break:break-word; color:var(--txt)}
+  .moment img{max-width:100%; border-radius:10px; margin-top:8px; display:block}
+  .moment .mdel{font-size:11px; color:var(--sub); cursor:pointer}
+  #momPrev img{width:110px; border-radius:8px; margin:8px 6px 0 0; display:inline-block}
   /* ===== fab ===== */
   .fab{position:fixed; right:16px; bottom:calc(18px + env(safe-area-inset-bottom)); width:46px; height:46px; border-radius:50%;
     background:var(--card); border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08); display:flex; align-items:center;
@@ -180,6 +226,7 @@
 </head>
 <body>
 
+<div id="view-checkin">
 <header>
   <div class="hrow">
     <div class="weekbox">
@@ -229,6 +276,45 @@
   </div>
   <p class="hint" id="localHint" style="display:none">当前为<b>本地试用模式</b>（数据只存在本机）。和另一半同步请点右上角 ⚙ 填入「云同步」配置。</p>
 </div>
+</div>
+
+<div id="view-log" class="pageview hidden">
+  <div class="ptitle">🕘 打卡记录</div>
+  <div class="tablecard" style="margin:0 0 12px">
+    <div id="logList"></div>
+  </div>
+  <p class="hint">显示每一次打卡的时间和项目；取消过的打卡不会出现在这里。</p>
+</div>
+
+<div id="view-chat" class="pageview hidden">
+  <div class="ptitle">💬 聊天 <small style="font-weight:500;font-size:11px;color:var(--sub)">只属于你们俩 · 记录保留最近 400 条</small></div>
+  <div class="tablecard chatbox"><div id="chatList"></div></div>
+  <div class="chatbar">
+    <input id="chatInput" maxlength="500" placeholder="说点什么…">
+    <button id="chatSend" class="btn primary" style="width:auto;height:38px;padding:0 16px">发送</button>
+  </div>
+</div>
+
+<div id="view-moments" class="pageview hidden">
+  <div class="ptitle">🌅 我们的小圈 <small style="font-weight:500;font-size:11px;color:var(--sub)">只有你们俩能看</small></div>
+  <div class="tablecard" style="padding:10px 14px;margin-bottom:12px">
+    <textarea id="momText" maxlength="1000" placeholder="写点什么吧——今天的心情、日记、想对她/他说的话…"></textarea>
+    <div class="mbar">
+      <label class="mini" for="momImg" style="cursor:pointer">📷 添加图片</label>
+      <input type="file" id="momImg" accept="image/*" style="display:none">
+      <button id="momPub" class="btn primary" style="width:auto;height:36px;padding:0 18px">发布</button>
+    </div>
+    <div id="momPrev"></div>
+  </div>
+  <div id="momList"></div>
+</div>
+
+<nav class="tabbar" id="tabbar">
+  <div class="tab on" data-t="checkin"><span class="ti">📋</span><span class="tl">打卡</span></div>
+  <div class="tab" data-t="log"><span class="ti">🕘</span><span class="tl">记录</span></div>
+  <div class="tab" data-t="chat"><span class="ti">💬</span><span class="tl">聊天</span></div>
+  <div class="tab" data-t="moments"><span class="ti">🌅</span><span class="tl">小圈</span></div>
+</nav>
 
   <div class="fab" id="syncFab" title="同步" style="bottom:calc(76px + env(safe-area-inset-bottom))">🔄</div>
   <div class="fab" id="fab">⚙</div>
@@ -465,6 +551,8 @@ function load(){
     else { migrateItems(s.items); }
     s.checks = s.checks || {};
     migrateChecks(s.checks);
+    s.chat = s.chat || [];
+    s.moments = s.moments || [];
     s.pending = s.pending || [];
     s.config = s.config || {me:"", nickH:"宏宏", nickW:"漫漫", gist:"", token:"", qualLine:10, notify:{}, lastSync:0};
     if(!s.config.gist){ s.config.gist = unb(BUILTIN.g); s.config.token = unb(BUILTIN.t); }
@@ -486,7 +574,8 @@ function load(){
   }
 }
 function save(){
-  var s = {items:state.items, checks:state.checks, pending:state.pending, config:state.config, devices:state.devices};
+  var s = {items:state.items, checks:state.checks, pending:state.pending, config:state.config,
+           devices:state.devices, chat:state.chat||[], moments:state.moments||[]};
   try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(e){}
 }
 
@@ -657,10 +746,12 @@ function toggle(dateStr, itemId){
 
   if(cur){
     delete mark[myKey];
+    delete mark[myKey+"_ts"];
     if(!Object.keys(mark).length) delete store[itemId];
     state.pending.push({d:dateStr, i:itemId, key:myKey, on:false, ts:Date.now()});
   }else{
     mark[myKey] = true;
+    mark[myKey+"_ts"] = Date.now();
     store[itemId] = mark;
     state.pending.push({d:dateStr, i:itemId, key:myKey, on:true, ts:Date.now()});
   }
@@ -703,12 +794,29 @@ function applyRemote(remote){
     if(!checks[op.d]) checks[op.d]={};
     var m = checks[op.d][op.i];
     if(typeof m !== "object" || m===null){ m = (typeof m==="string" && m==="wife") ? {w:true} : {}; }
-    if(on) m[key]=true; else delete m[key];
+    if(on){ m[key]=true; }
+    else { delete m[key]; }
+    if(on && op.ts){ m[key+"_ts"] = op.ts; }
     if(Object.keys(m).length) checks[op.d][op.i]=m; else delete checks[op.d][op.i];
   });
   state.items = items; state.checks = checks;
+  // 聊天与小圈：按 id 合并（两人同时发不丢）
+  state.chat = mergeById(state.chat||[], remote.chat||[], 400);
+  var mmap = {};
+  (state.moments||[]).forEach(function(m){ mmap[m.id]=m; });
+  (remote.moments||[]).forEach(function(m){ if(!mmap[m.id]){ state.moments.push(m); mmap[m.id]=1; } });
+  state.moments = (state.moments||[]).sort(function(a,b){ return a.t-b.t; });
   if(remote.devices){ state.devices = remote.devices; }
   return grew;
+}
+
+function mergeById(a, b, cap){
+  var map={}, out=[];
+  a.concat(b).forEach(function(m){
+    if(m && m.id && !map[m.id]){ map[m.id]=1; out.push(m); }
+  });
+  out.sort(function(x,y){ return x.t-y.t; });
+  return out.length>cap ? out.slice(-cap) : out;
 }
 
 async function pullSilent(){
@@ -726,6 +834,7 @@ async function pullSilent(){
     var f = j.files[fname];
     var remote = {};
     try{ remote = JSON.parse(f.content||"{}"); }catch(e){}
+    if(j.owner && j.owner.login){ state.config.gistOwner = j.owner.login; }
     state.config.gistFile = fname; save();
     var grew = applyRemote(remote);
     // 拉到对方的提醒 token 也存一份
@@ -734,6 +843,9 @@ async function pullSilent(){
     state.config.lastSync = Date.now();
     state.pending = [];
     save(); render(); setDot("ok");
+    if(curTab==="log") renderLog();
+    if(curTab==="chat") renderChat();
+    if(curTab==="moments") renderMoments();
     if(grew || hadPending){ setTimeout(function(){ push(true); }, 200); }
   }catch(e){
     setDot("err"); toastMsg("同步失败，先用本地数据（联网后自动重试）");
@@ -769,6 +881,8 @@ async function push(force){
     var payload = JSON.stringify({
       items: state.items,
       checks: rc,
+      chat: state.chat||[],
+      moments: state.moments||[],
       notify: (function(){
         var rn = remote.notify || {}, ln = state.config.notify || {}, m = {};
         ["husband","wife"].forEach(function(k){ m[k] = ln[k] || rn[k] || null; });
@@ -1189,6 +1303,215 @@ document.querySelectorAll(".ttab").forEach(function(el){
 
 $("meBtn").onclick = function(){ renderMe(); drawMeTrend(); $("mePage").classList.add("show"); };
 $("meClose").onclick = function(){ $("mePage").classList.remove("show"); };
+
+/* ================= 底部导航 ================= */
+var curTab = "checkin";
+function switchTab(t){
+  curTab = t;
+  ["checkin","log","chat","moments"].forEach(function(v){
+    $("view-"+v).classList.toggle("hidden", v!==t);
+  });
+  document.querySelectorAll("#tabbar .tab").forEach(function(el){
+    el.classList.toggle("on", el.getAttribute("data-t")===t);
+  });
+  $("fab").style.display = (t==="checkin") ? "flex" : "none";
+  $("syncFab").style.display = (t==="checkin") ? "flex" : "none";
+  if(t==="log") renderLog();
+  if(t==="chat"){ renderChat(); startChatPoll(); } else stopChatPoll();
+  if(t==="moments") renderMoments();
+}
+document.querySelectorAll("#tabbar .tab").forEach(function(el){
+  el.onclick = function(){ switchTab(el.getAttribute("data-t")); };
+});
+
+function findItem(id){
+  for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) return state.items[i];
+  return null;
+}
+function fmtHM(d){ return pad(d.getHours())+":"+pad(d.getMinutes()); }
+
+/* ================= 记录页 ================= */
+function renderLog(){
+  var events=[];
+  for(var ds in state.checks){
+    var day = state.checks[ds];
+    for(var id in day){
+      var mark = day[id];
+      if(!mark || typeof mark!=="object") continue;
+      var it = findItem(id); if(!it) continue;
+      if(mark.h) events.push({ts: mark.h_ts||0, who:"husband", name:it.name, ds:ds});
+      if(mark.w) events.push({ts: mark.w_ts||0, who:"wife", name:it.name, ds:ds});
+    }
+  }
+  events.sort(function(a,b){ return (b.ts||0)-(a.ts||0) || (b.ds>a.ds?1:-1); });
+  var html="", lastDay="", shown=0;
+  for(var i=0;i<events.length && shown<150;i++){
+    var e=events[i]; shown++;
+    if(e.ds!==lastDay){
+      lastDay=e.ds;
+      var dd=parseD(e.ds);
+      html += "<div class='logday'>"+fmtMD(dd)+" "+DAYN[dd.getDay()]+"</div>";
+    }
+    var tm = e.ts ? fmtHM(new Date(e.ts)) : "较早";
+    html += "<div class='logrow'><span class='lt'>"+tm+"</span><span class='lw "+(e.who==="wife"?"w":"h")+"'>"+nameOf(e.who)+"</span><span>打卡了「"+esc(e.name)+"」</span></div>";
+  }
+  if(!events.length) html = "<div class='empty-tips'>还没有打卡记录<br>去打卡页开始第一天吧 💪</div>";
+  $("logList").innerHTML = html;
+}
+
+/* ================= 聊天页 ================= */
+var chatTimer=null;
+function renderChat(){
+  var deviceMe = state.config.me || "husband";
+  var list = state.chat||[];
+  var html="", lastDay="";
+  list.forEach(function(m){
+    var d = new Date(m.t);
+    var ds = dstr(d);
+    if(ds!==lastDay){ lastDay=ds; html+="<div class='logday'>"+fmtMD(d)+"</div>"; }
+    var mine = m.who===deviceMe;
+    html += "<div class='bub"+(mine?" me":"")+"'>"+esc(m.text)+
+      "<span class='bt'>"+(mine?"我":nameOf(m.who))+" "+fmtHM(d)+"</span></div>";
+  });
+  if(!list.length) html="<div class='empty-tips'>还没有消息，说句悄悄话吧 💬</div>";
+  $("chatList").innerHTML = html;
+  var box = document.querySelector(".chatbox");
+  box.scrollTop = box.scrollHeight;
+}
+function sendChat(){
+  var inp=$("chatInput");
+  var text = inp.value.trim();
+  if(!text) return;
+  var deviceMe = state.config.me || "husband";
+  var m = {id:"m"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), who:deviceMe, text:text.slice(0,500)};
+  state.chat = state.chat||[];
+  state.chat.push(m);
+  if(state.chat.length>400) state.chat = state.chat.slice(-400);
+  inp.value=""; save(); renderChat(); schedulePush(true);
+}
+$("chatSend").onclick = sendChat;
+$("chatInput").addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); sendChat(); } });
+
+var chatTimer2=null;
+function startChatPoll(){
+  pullChat();
+  if(chatTimer2) clearInterval(chatTimer2);
+  chatTimer2 = setInterval(pullChat, 6000);
+}
+function stopChatPoll(){ if(chatTimer2){ clearInterval(chatTimer2); chatTimer2=null; } }
+async function pullChat(){
+  if(!hasCfg()) return;
+  try{
+    var owner = state.config.gistOwner || "phihonghugh";
+    var url = "https://gist.githubusercontent.com/"+owner+"/"+state.config.gist+"/raw/data.json";
+    var r = await fetch(url, {cache:"no-store"});
+    if(!r.ok) return;
+    var remote = JSON.parse(await r.text());
+    var merged = mergeById(state.chat||[], remote.chat||[], 400);
+    var oldTxt = JSON.stringify((state.chat||[]).map(function(m){return m.id;}));
+    if(JSON.stringify(merged.map(function(m){return m.id;})) !== oldTxt){
+      state.chat = merged; save();
+      if(curTab==="chat") renderChat();
+    }
+  }catch(e){}
+}
+
+/* ================= 小圈页 ================= */
+var momPendingPhoto = null;
+$("momImg").onchange = function(e){
+  var f = e.target.files[0];
+  if(!f) return;
+  compressImage(f, function(dataURL){
+    momPendingPhoto = dataURL;
+    $("momPrev").innerHTML = "<img src='"+dataURL+"'>";
+  });
+  e.target.value = "";
+};
+function compressImage(file, cb){
+  var img = new Image(), reader = new FileReader();
+  reader.onload = function(ev){
+    img.onload = function(){
+      var max = 720, scale = Math.min(1, max/Math.max(img.width, img.height));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.width*scale); c.height = Math.round(img.height*scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      cb(c.toDataURL("image/jpeg", 0.55));
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function createPhotoGist(dataURL){
+  var r = await fetch("https://api.github.com/gists", {method:"POST", headers:ghHeaders(),
+    body: JSON.stringify({description:"checkin-photo", public:false, files:{"p.txt":{content:dataURL}}})});
+  if(!r.ok) throw new Error("photo gist "+r.status);
+  var j = await r.json();
+  return j.id;
+}
+$("momPub").onclick = async function(){
+  var txt = $("momText").value.trim();
+  if(!txt && !momPendingPhoto){ toastMsg("写点内容或选张图片吧"); return; }
+  if(!hasCfg()){ toastMsg("先在⚙设置里连上云同步"); return; }
+  toastMsg("发布中…");
+  var deviceMe = state.config.me || "husband";
+  var m = {id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), who:deviceMe, text:txt.slice(0,1000)};
+  try{
+    if(momPendingPhoto){
+      m.photoGist = await createPhotoGist(momPendingPhoto);
+    }
+    state.moments = state.moments||[];
+    state.moments.push(m);
+    $("momText").value = ""; momPendingPhoto = null; $("momPrev").innerHTML = "";
+    save(); renderMoments(); schedulePush(true);
+    toastMsg("已发布 ✓");
+  }catch(e){
+    toastMsg("发布失败（图片可能太大），重试一下");
+  }
+};
+var photoMemCache = {};
+function renderMoments(){
+  var list = (state.moments||[]).slice().sort(function(a,b){ return b.t-a.t; });
+  var deviceMe = state.config.me || "husband";
+  var html="";
+  list.forEach(function(m){
+    var mine = m.who===deviceMe;
+    html += "<div class='moment'><div class='mh'>"+
+      "<div class='mav' style='background:"+(m.who==="wife"?"var(--pink-bg)":"var(--blue-bg)")+"'>"+(m.who==="wife"?"👩":"👨")+"</div>"+
+      "<div class='mt1'><div class='mnick'>"+nameOf(m.who)+"</div><div class='mtime'>"+fmtMD(new Date(m.t))+" "+fmtHM(new Date(m.t))+"</div></div>"+
+      (mine?"<span class='mdel' data-del='"+m.id+"'>删除</span>":"")+"</div>"+
+      (m.text?"<div class='mtext'>"+esc(m.text)+"</div>":"")+
+      (m.photoGist?"<img data-pg='"+m.photoGist+"' alt='图片'>":"")+
+      "</div>";
+  });
+  if(!list.length) html = "<div class='empty-tips'>小圈还是空的，发布第一条动态吧 🌅</div>";
+  $("momList").innerHTML = html;
+  loadMomentPhotos();
+}
+function loadMomentPhotos(){
+  var imgs = document.querySelectorAll("#momList img[data-pg]");
+  Array.prototype.forEach.call(imgs, function(img){
+    var gid = img.getAttribute("data-pg");
+    if(photoMemCache[gid]){ img.src = photoMemCache[gid]; return; }
+    fetch("https://api.github.com/gists/"+gid, {headers:ghHeaders()})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var fs = j.files || {};
+        var f = fs["p.txt"] || (Object.keys(fs).length ? fs[Object.keys(fs)[0]] : null);
+        if(f && f.content){
+          photoMemCache[gid] = f.content.trim();
+          img.src = photoMemCache[gid];
+        }
+      }).catch(function(){});
+  });
+}
+$("momList").onclick = function(e){
+  var d = e.target.closest(".mdel");
+  if(!d) return;
+  var id = d.getAttribute("data-del");
+  if(!confirm("删除这条动态？")) return;
+  state.moments = (state.moments||[]).filter(function(m){ return m.id!==id; });
+  save(); schedulePush(true); renderMoments();
+};
 
 /* ================= 启动 ================= */
 if(!state.config.me){ $("setup").classList.add("show"); }
