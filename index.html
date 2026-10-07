@@ -354,9 +354,9 @@
     <div class="secttl">💕 自动回复</div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:var(--txt)">
       <input type="checkbox" id="autoReplyChk" style="width:18px;height:18px;flex:none">
-      漫漫发消息后 2~3 分钟，自动替宏宏回一句甜甜的话（不秒回）
+      漫漫发消息后自动替宏宏回一句甜甜的话
     </label>
-    <p class="hint">只在宏宏的手机上生效；超过 2 小时的消息不会自动回，留给你本人回复。</p>
+    <p class="hint">不秒回：平时等 2 分钟；她连发 3 句以上（聊得正嗨）时 30 秒就回。叫法随机轮换（宝贝/媳妇儿/亲爱的/乖乖）。超过 2 小时的消息不自动回。</p>
 
     <div class="sep"></div>
     <div class="secttl">云同步（GitHub Gist）</div>
@@ -1406,6 +1406,11 @@ function renderLog(){
 }
 
 /* ================= 聊天页 ================= */
+/* 聊天里的专属称呼：漫漫显示为“宝贝”（仅聊天语境） */
+function chatNameOf(who){
+  if(who==="wife" && (state.config.nickW||"漫漫")==="漫漫") return "宝贝";
+  return nameOf(who);
+}
 var chatTimer=null;
 function renderChat(){
   var deviceMe = state.config.me || "husband";
@@ -1417,7 +1422,7 @@ function renderChat(){
     if(ds!==lastDay){ lastDay=ds; html+="<div class='logday'>"+fmtMD(d)+"</div>"; }
     var mine = m.who===deviceMe;
     html += "<div class='bub"+(mine?" me":"")+"'>"+esc(m.text)+
-      "<span class='bt'>"+(mine?"我":nameOf(m.who))+" "+fmtHM(d)+"</span></div>";
+      "<span class='bt'>"+(mine?"我":chatNameOf(m.who))+" "+fmtHM(d)+"</span></div>";
   });
   if(!list.length) html="<div class='empty-tips'>还没有消息，说句悄悄话吧 💬</div>";
   $("chatList").innerHTML = html;
@@ -1561,16 +1566,17 @@ $("momList").onclick = function(e){
 };
 
 /* ================= 自动回复（宏宏手机专属） ================= */
+var NICKS = ["宝贝", "媳妇儿", "亲爱的", "乖乖"];
 var AUTO_REPLIES = {
-  miss:   ["刚刚还在想你呢，小馋猫", "嘿嘿，咱们想到一块儿啦", "想你啦，大大的抱抱~", "也超想你，特别的想"],
-  tired:  ["抱抱漫漫，辛苦啦~", "漫漫最辛苦啦，心疼你", "回家给你捶捶背捏捏肩"],
-  eat:    ["要好好吃饭呀，小馋猫", "多吃一点点，乖乖的哦~", "嗯嗯，也想尝尝你吃的"],
-  good:   ["漫漫最棒啦，好厉害呀", "给你点个大大的赞~", "嘿嘿，就知道漫漫最行"],
-  night:  ["晚安啦，梦里也要有我哦", "乖乖睡，明天美美的~", "晚安漫漫，做个甜甜的梦"],
-  morning:["早安漫漫，今天也想你", "早早起，元气满满的哦~", "早安呀，被子要盖盖好"],
-  hi:     ["嗯嗯，我在呢，漫漫说~", "在呢在呢，正想着你呢", "嘿嘿，被你猜中啦~", "漫漫说什么都对~"],
-  love:   ["也爱你呀，超爱超爱那种", "嘿嘿，脸都红透了~", "爱你哟，我的漫漫"],
-  default:["嗯嗯，漫漫说得对~", "嘿嘿，都听漫漫的~", "漫漫开心，我就开心", "好呀好呀，全听你的~", "嘿嘿，漫漫最好啦", "漫漫慢慢说，我听着呢"]
+  miss:   ["刚刚还在想你呢，{n}", "嘿嘿，咱们想到一块儿啦", "大大的抱抱给{n}~", "也超想你，特别的想"],
+  tired:  ["抱抱{n}，辛苦啦~", "{n}最辛苦啦，心疼你", "回家给{n}捶捶背捏捏肩"],
+  eat:    ["要好好吃饭呀，小馋猫", "多吃一点点，乖乖的哦~", "嗯嗯，也想尝尝{n}吃的"],
+  good:   ["{n}最棒啦，好厉害呀", "给{n}点个大大的赞~", "嘿嘿，就知道{n}最行"],
+  night:  ["晚安啦，梦里也要有我哦", "乖乖睡，明天美美的~", "晚安{n}，做个甜甜的梦"],
+  morning:["早安{n}，今天也想你", "早早起，元气满满的哦~", "早安呀，被子要盖盖好"],
+  hi:     ["嗯嗯，我在呢，{n}说~", "在呢在呢，正想着你呢", "嘿嘿，被{n}猜中啦~", "{n}说什么都对~"],
+  love:   ["也爱你呀，超爱超爱那种", "嘿嘿，脸都红透了~", "爱你哟，我的{n}"],
+  default:["嗯嗯，{n}说得对~", "嘿嘿，都听{n}的~", "{n}开心，我就开心", "好呀好呀，全听{n}的~", "嘿嘿，{n}最好啦", "{n}慢慢说，我听着呢"]
 };
 function pickAutoReply(text){
   var t = text || "";
@@ -1587,20 +1593,30 @@ function pickAutoReply(text){
   var recent = (state.config.autoReplyRecent || []).slice(-2);
   var cands = pool.filter(function(x){ return recent.indexOf(x) < 0; });
   var pick = cands.length ? cands[Math.floor(Math.random()*cands.length)] : pool[Math.floor(Math.random()*pool.length)];
+  var nick = NICKS[Math.floor(Math.random()*NICKS.length)];
+  pick = pick.split("{n}").join(nick);
   state.config.autoReplyRecent = (state.config.autoReplyRecent || []).concat([pick]).slice(-3);
   save();
   return pick;
 }
-/* 时机：漫漫最后一条消息未回复 + 已过 2 分钟 + 不超过 2 小时 */
+/* 触发判定：
+   漫漫最后一段连续消息（中间没有宏宏的回复）未回复时——
+   · 若她连发 3 句以上且集中在 5 分钟内（聊得正嗨）→ 等 30 秒就回
+   · 否则 → 等 2 分钟再回（像人一样不秒回）
+   · 超过 2 小时的旧消息不自动回，留给宏宏本人 */
 function maybeAutoReply(){
   if(state.config.autoReply === false) return;
   if((state.config.me || "husband") !== "husband") return; // 只在宏宏的手机生效
   var chat = state.chat || [];
   if(!chat.length) return;
-  var last = chat[chat.length-1];
-  if(last.who !== "wife") return; // 最后一条是自己的（或已回复过），不回
+  var streak = [];
+  for(var i=chat.length-1; i>=0 && chat[i].who==="wife"; i--) streak.unshift(chat[i]);
+  if(!streak.length) return; // 最后一条是自己（或已回复过），不回
+  var last = streak[streak.length-1];
+  var fast = streak.length >= 3 && (last.t - streak[0].t) <= 300000;
+  var threshold = fast ? 30000 : 120000;
   var age = Date.now() - last.t;
-  if(age < 120000 || age > 7200000) return; // 2~3 分钟感 + 太旧不回
+  if(age < threshold || age > 7200000) return;
   var reply = {
     id: "m"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     t: Date.now(), who: "husband", auto: true,
