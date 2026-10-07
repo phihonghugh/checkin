@@ -126,6 +126,22 @@
     background:var(--card); border-top:1px solid var(--line); z-index:34; max-width:760px; margin:0 auto}
   .chatbar input{flex:1; height:38px; border-radius:10px; border:1px solid var(--line); padding:0 10px; font-size:14px; background:#fbfbfc; color:var(--txt)}
   .chatbar input:focus{outline:none; border-color:var(--blue)}
+  .chatbtn{width:38px; height:38px; border:none; background:#f2f2f5; border-radius:10px; font-size:19px; cursor:pointer; flex:none}
+  .chatbtn:active{background:#e8e8ec}
+  #stickerPanel{position:fixed; left:0; right:0; bottom:96px; z-index:34; max-width:760px; margin:0 auto;
+    background:#fff; border-top:1px solid var(--line); box-shadow:0 -4px 14px rgba(0,0,0,.06);
+    padding:10px; max-height:310px; overflow-y:auto}
+  .sp-emojis{display:grid; grid-template-columns:repeat(8,1fr); gap:2px}
+  .sp-emojis span{font-size:22px; text-align:center; padding:4px 0; cursor:pointer; border-radius:6px}
+  .sp-emojis span:active{background:#f0f0f3}
+  .sp-sep{font-size:11px; color:var(--sub); margin:10px 0 5px; display:flex; justify-content:space-between; align-items:center}
+  .sp-stickers{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; min-height:20px}
+  .sp-stickers .stk{position:relative; background:#f6f6f8; border-radius:8px; overflow:hidden; cursor:pointer;
+    aspect-ratio:1; display:flex; align-items:center; justify-content:center}
+  .sp-stickers .stk img{max-width:100%; max-height:100%}
+  .sp-stickers .stk .delx{position:absolute; top:0; right:0; background:#c94c42; color:#fff; font-size:10px; padding:1px 5px; border-radius:0 0 0 6px}
+  .sp-actions{display:flex; gap:8px; margin-top:10px}
+  .bub img{max-width:180px; border-radius:10px; display:block; margin-top:4px}
   /* 小圈 */
   .mpub textarea{width:100%; min-height:64px; border:none; resize:none; font-size:14px; outline:none;
     background:transparent; font-family:inherit; color:var(--txt); line-height:1.5}
@@ -293,7 +309,21 @@
 <div id="view-chat" class="pageview hidden">
   <div class="ptitle">💬 聊天 <small style="font-weight:500;font-size:11px;color:var(--sub)">只属于你们俩 · 记录保留最近 400 条</small></div>
   <div class="tablecard chatbox"><div id="chatList"></div></div>
+  <div id="stickerPanel" class="hidden">
+    <div class="sp-emojis" id="emojiGrid"></div>
+    <div class="sp-sep"><span>我的表情</span><span class="mini" id="spManage" style="cursor:pointer">管理</span></div>
+    <div class="sp-stickers" id="stickerGrid"></div>
+    <div class="sp-actions">
+      <label class="mini" for="stkFile" style="cursor:pointer">➕ 收藏表情/动图</label>
+      <input type="file" id="stkFile" accept="image/*" style="display:none">
+      <label class="mini" for="camFile" style="cursor:pointer">📷 拍照发送</label>
+      <input type="file" id="camFile" accept="image/*" capture="camera" style="display:none">
+      <label class="mini" for="galFile" style="cursor:pointer">🖼 相册发送</label>
+      <input type="file" id="galFile" accept="image/*" multiple style="display:none">
+    </div>
+  </div>
   <div class="chatbar">
+    <button class="chatbtn" id="emojiBtn">😊</button>
     <input id="chatInput" maxlength="500" placeholder="说点什么…">
     <button id="chatSend" class="btn primary" style="width:auto;height:38px;padding:0 16px">发送</button>
   </div>
@@ -1421,7 +1451,8 @@ function renderChat(){
     var ds = dstr(d);
     if(ds!==lastDay){ lastDay=ds; html+="<div class='logday'>"+fmtMD(d)+"</div>"; }
     var mine = m.who===deviceMe;
-    html += "<div class='bub"+(mine?" me":"")+"'>"+esc(m.text)+
+    html += "<div class='bub"+(mine?" me":"")+"'>"+esc(m.text||"")+
+      (m.photoGist?"<img data-pg='"+m.photoGist+"' alt='图片'>":"")+
       "<span class='bt'>"+(mine?"我":chatNameOf(m.who))+" "+fmtHM(d)+"</span></div>";
   });
   if(!list.length) html="<div class='empty-tips'>还没有消息，说句悄悄话吧 💬</div>";
@@ -1468,26 +1499,129 @@ async function pullChat(){
   }catch(e){}
 }
 
-/* ================= 小圈页 ================= */
-var momPendingPhoto = null;
-$("momImg").onchange = function(e){
-  var f = e.target.files[0];
-  if(!f) return;
-  compressImage(f, function(dataURL){
-    momPendingPhoto = dataURL;
-    $("momPrev").innerHTML = "<img src='"+dataURL+"'>";
+/* ================= 表情面板 / 图片发送 ================= */var EMOJIS = ["😄","😂","🥰","😍","😘","😜","🤪","😊","🥺","😭","😅","😴","🤤","😇","🤗","🫡","🙄","😤","🥳","🤔","🫣","😏","🤭","🙈","🥹","😎","🤯","😬","😰","🥶","🤒","🤧","😡","🫠","🤧","💗","💕","💖","💔","❤️","🖤","🌹","🌸","🌙","☀️","🎉","🍺","🍰","💤","✨","🐶","🐱","👍","👎","🙏","💋","🫶","🤝","💪","👀"];
+var spManageMode = false;
+
+function renderEmojiPanel(){
+  var html = "";
+  EMOJIS.forEach(function(e){ html += "<span data-e='"+e+"'>"+e+"</span>"; });
+  $("emojiGrid").innerHTML = html;
+  renderStickerGrid();
+}
+function renderStickerGrid(){
+  var st = state.stickers || [];
+  var html = "";
+  st.forEach(function(x){
+    html += "<div class='stk' data-sid='"+x.id+"'>"+
+      (spManageMode ? "<span class='delx' data-del='"+x.id+"'>删</span>" : "")+
+      "<img data-pg='"+x.gistId+"' alt='表情'></div>";
+  });
+  if(!st.length) html = "<div class='empty-tips' style='padding:6px'>还没有收藏表情，点下面 ➕ 添加</div>";
+  $("stickerGrid").innerHTML = html;
+  loadMomentPhotos();
+}
+$("emojiBtn").onclick = function(){
+  var p = $("stickerPanel");
+  p.classList.toggle("hidden");
+  if(!p.classList.contains("hidden")) renderEmojiPanel();
+};
+$("emojiGrid") /* 绑定在面板渲染后委托 */ ;
+document.addEventListener("click", function(e){
+  var em = e.target.closest("#emojiGrid span");
+  if(em){ var inp = $("chatInput"); inp.value += em.getAttribute("data-e"); inp.focus(); return; }
+  var stk = e.target.closest("#stickerGrid .stk");
+  if(stk && !spManageMode){
+    var sid = stk.getAttribute("data-sid");
+    var s = (state.stickers||[]).filter(function(x){return x.id===sid;})[0];
+    if(s && s.gistId) sendChatPhotoByGist(s.gistId);
+  }
+  var del = e.target.closest(".delx");
+  if(del && spManageMode){
+    var did = del.getAttribute("data-del");
+    if(confirm("删除这个收藏表情？")) deleteSticker(did);
+  }
+});
+$("spManage").onclick = function(){ spManageMode = !spManageMode; renderStickerGrid(); };
+
+function addSticker(dataURL){
+  state.stickers = state.stickers || [];
+  if(state.stickers.length >= 30){ toastMsg("收藏满 30 个啦，先删几个"); return; }
+  toastMsg("收藏中…");
+  createPhotoGist(dataURL).then(function(gid){
+    state.stickers.push({id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), gistId:gid});
+    save(); schedulePush(true);
+    renderEmojiPanel();
+    toastMsg("已收藏 ✓");
+  }).catch(function(){ toastMsg("收藏失败，重试一下"); });
+}
+function deleteSticker(id){
+  state.stickers = (state.stickers||[]).filter(function(x){ return x.id!==id; });
+  save(); schedulePush(true); renderStickerGrid();
+}
+
+function handleChatImage(file, isSticker){
+  if(!file) return;
+  if(file.type === "image/gif"){
+    if(file.size > 700*1024){ toastMsg("这张动图太大（超700KB），换张小的吧"); return; }
+    var reader = new FileReader();
+    reader.onload = function(ev){ proceed(ev.target.result); };
+    reader.readAsDataURL(file);
+  } else if(file.type === "image/png" && isSticker){
+    compressImage(file, function(d){ proceed(d); }, 240, "image/png");
+  } else {
+    compressImage(file, function(d){ proceed(d); }, isSticker ? 240 : 800, "image/jpeg");
+  }
+  function proceed(dataURL){
+    if(isSticker) addSticker(dataURL);
+    else sendChatPhoto(dataURL);
+  }
+}
+$("stkFile").onchange = function(e){ handleChatImage(e.target.files[0], true); e.target.value=""; };
+$("camFile").onchange = function(e){ handleChatImage(e.target.files[0], false); e.target.value=""; };
+$("galFile").onchange = function(e){
+  Array.prototype.forEach.call(e.target.files, function(f, idx){
+    setTimeout(function(){ handleChatImage(f, false); }, idx*300);
   });
   e.target.value = "";
 };
-function compressImage(file, cb){
+
+function sendChatPhoto(dataURL){
+  if(!hasCfg()){ toastMsg("先在⚙设置里连上云同步"); return; }
+  var deviceMe = state.config.me || "husband";
+  var m = {id:"m"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), who:deviceMe, text:"", photoGist:null};
+  toastMsg("发送中…");
+  createPhotoGist(dataURL).then(function(gid){
+    m.photoGist = gid;
+    state.chat = state.chat||[];
+    state.chat.push(m);
+    if(state.chat.length>400) state.chat = state.chat.slice(-400);
+    save(); renderChat(); schedulePush(true);
+  }).catch(function(){ toastMsg("发送失败，重试一下"); });
+}
+function sendChatPhotoByGist(gid){
+  if(!hasCfg()){ toastMsg("先连上云同步"); return; }
+  var deviceMe = state.config.me || "husband";
+  state.chat = state.chat||[];
+  state.chat.push({id:"m"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), who:deviceMe, text:"", photoGist:gid});
+  if(state.chat.length>400) state.chat = state.chat.slice(-400);
+  save(); renderChat(); schedulePush(true);
+}
+
+function compressImage(file, cb, maxSide, mime){
+  if(file.type === "image/gif"){ // gif 不进压缩分支
+    var r0 = new FileReader();
+    r0.onload = function(e){ cb(e.target.result); };
+    r0.readAsDataURL(file);
+    return;
+  }
   var img = new Image(), reader = new FileReader();
   reader.onload = function(ev){
     img.onload = function(){
-      var max = 720, scale = Math.min(1, max/Math.max(img.width, img.height));
+      var scale = Math.min(1, maxSide/Math.max(img.width, img.height));
       var c = document.createElement("canvas");
       c.width = Math.round(img.width*scale); c.height = Math.round(img.height*scale);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      cb(c.toDataURL("image/jpeg", 0.55));
+      cb(c.toDataURL(mime || "image/jpeg", 0.55));
     };
     img.src = ev.target.result;
   };
@@ -1500,6 +1634,18 @@ async function createPhotoGist(dataURL){
   var j = await r.json();
   return j.id;
 }
+
+/* ================= 小圈页 ================= */
+var momPendingPhoto = null;
+$("momImg").onchange = function(e){
+  var f = e.target.files[0];
+  if(!f) return;
+  compressImage(f, function(dataURL){
+    momPendingPhoto = dataURL;
+    $("momPrev").innerHTML = "<img src='"+dataURL+"'>";
+  }, 720, "image/jpeg");
+  e.target.value = "";
+};
 $("momPub").onclick = async function(){
   var txt = $("momText").value.trim();
   if(!txt && !momPendingPhoto){ toastMsg("写点内容或选张图片吧"); return; }
@@ -1540,7 +1686,7 @@ function renderMoments(){
   loadMomentPhotos();
 }
 function loadMomentPhotos(){
-  var imgs = document.querySelectorAll("#momList img[data-pg]");
+  var imgs = document.querySelectorAll("#momList img[data-pg], #chatList img[data-pg]");
   Array.prototype.forEach.call(imgs, function(img){
     var gid = img.getAttribute("data-pg");
     if(photoMemCache[gid]){ img.src = photoMemCache[gid]; return; }
@@ -1576,13 +1722,24 @@ var AUTO_REPLIES = {
   morning:["早安{n}，今天也想你", "早早起，元气满满的哦~", "早安呀，被子要盖盖好"],
   hi:     ["嗯嗯，我在呢，{n}说~", "在呢在呢，正想着你呢", "嘿嘿，被{n}猜中啦~", "{n}说什么都对~"],
   love:   ["也爱你呀，超爱超爱那种", "嘿嘿，脸都红透了~", "爱你哟，我的{n}"],
+  genshin:["每日委托做完啦，树脂给你留着", "原石攒够了，等你上线一起抽", "上线嘛，陪我打一把~"],
+  flower: ["花花今天浇好水啦", "铁蛋好像又胖了一圈", "郁金香快开花啦，等着吧"],
+  shift:  ["夜班注意安全，到家说一声", "下班路上慢一点，我在呢", "下夜班补个好觉，我不吵你"],
+  care:   ["药记得吃，不许糊弄哦", "早点睡，我看着你睡", "晚上别熬夜啦，乖乖的"],
   default:["嗯嗯，{n}说得对~", "嘿嘿，都听{n}的~", "{n}开心，我就开心", "好呀好呀，全听{n}的~", "嘿嘿，{n}最好啦", "{n}慢慢说，我听着呢"]
 };
+/* 敏感话题：自动回复绝不插嘴，留给宏宏本人（这些是你们认真谈的事） */
+var SENSITIVE_RE = /房|彩礼|聘|协议|退路|钱|工资|收入|存款|贷|孩子|怀孕|生娃|离|前夫|婆|丈母娘|妈|婚礼|酒席|亲戚/;
 function pickAutoReply(text){
   var t = text || "";
+  if(SENSITIVE_RE.test(t)) return null; // 敏感话题不自动回，留给宏宏本人
   var hour = new Date().getHours();
   var pool;
-  if(/晚安|睡觉|困了|去睡/.test(t)) pool = AUTO_REPLIES.night;
+  if(/原神|委托|树脂|原石|抽卡|深渊|上线|体力/.test(t)) pool = AUTO_REPLIES.genshin;
+  else if(/浇花|花花|铁蛋|开花|郁金香|芍药|长寿花|海棠/.test(t)) pool = AUTO_REPLIES.flower;
+  else if(/夜班|下班|上班|路上|到家|倒班/.test(t)) pool = AUTO_REPLIES.shift;
+  else if(/药|失眠|睡不着|熬夜|胸口/.test(t)) pool = AUTO_REPLIES.care;
+  else if(/晚安|睡觉|困了|去睡/.test(t)) pool = AUTO_REPLIES.night;
   else if(/早安|起床|醒了/.test(t) || hour < 7) pool = AUTO_REPLIES.morning;
   else if(/想你|爱你|喜欢|亲亲|抱抱/.test(t)) pool = AUTO_REPLIES.love;
   else if(/累|辛苦|难受|加班|烦/.test(t)) pool = AUTO_REPLIES.tired;
