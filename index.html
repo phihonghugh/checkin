@@ -130,7 +130,10 @@
   .mpub textarea{width:100%; min-height:64px; border:none; resize:none; font-size:14px; outline:none;
     background:transparent; font-family:inherit; color:var(--txt); line-height:1.5}
   .mbar{display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid var(--line)}
-  .mpub textarea{font-size:15px}
+  #momText{width:100%; min-height:64px; border:0; outline:none; -webkit-appearance:none; appearance:none;
+    resize:none; font-size:15px; background:transparent; font-family:inherit; color:var(--txt); line-height:1.6}
+  .mpub textarea{width:100%; min-height:64px; border:0; outline:none; -webkit-appearance:none; appearance:none;
+    resize:none; font-size:15px; background:transparent; font-family:inherit; color:var(--txt); line-height:1.6}
   .moment{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px}
   .moment .mh{display:flex; gap:9px; align-items:center; margin-bottom:6px}
   .moment .mav{width:36px; height:36px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:19px; flex:none}
@@ -298,10 +301,11 @@
 
 <div id="view-moments" class="pageview hidden">
   <div class="ptitle">🌅 我们的小圈 <small style="font-weight:500;font-size:11px;color:var(--sub)">只有你们俩能看</small></div>
-  <div style="padding:2px 6px 8px;margin-bottom:12px">
+  <div class="tablecard" style="padding:12px 14px;margin-bottom:12px">
     <textarea id="momText" maxlength="1000" placeholder="写点什么吧——今天的心情、日记、想对她/他说的话…"></textarea>
     <div class="mbar">
       <label class="mini" for="momImg" style="cursor:pointer">📷 添加图片</label>
+      <input type="file" id="momImg" accept="image/*" style="display:none">
       <button id="momPub" class="btn primary" style="width:auto;height:36px;padding:0 18px">发布</button>
     </div>
     <div id="momPrev"></div>
@@ -345,6 +349,14 @@
       <div class="field"><label><span style="color:var(--blue)">宏宏</span> 的 Key</label><input id="pushH" placeholder="AT_xxx|UID_xxx 或 SCT_xxx"></div>
       <div class="field"><label><span style="color:var(--pink)">漫漫</span> 的 Key</label><input id="pushW" placeholder="AT_xxx|UID_xxx 或 SCT_xxx"></div>
     </div>
+
+    <div class="sep"></div>
+    <div class="secttl">💕 自动回复</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:var(--txt)">
+      <input type="checkbox" id="autoReplyChk" style="width:18px;height:18px;flex:none">
+      漫漫发消息后 2~3 分钟，自动替宏宏回一句甜甜的话（不秒回）
+    </label>
+    <p class="hint">只在宏宏的手机上生效；超过 2 小时的消息不会自动回，留给你本人回复。</p>
 
     <div class="sep"></div>
     <div class="secttl">云同步（GitHub Gist）</div>
@@ -453,6 +465,25 @@
 
 <script>
 "use strict";
+/* 全局错误捕获：写入本地存储便于诊断 */
+window.addEventListener("error", function(e){
+  try{
+    var s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    s.__err = s.__err || [];
+    s.__err.push({m: e.message, src: (e.filename||"").split("/").pop()+":"+e.lineno+":"+e.colno, t: Date.now()});
+    if(s.__err.length > 20) s.__err = s.__err.slice(-20);
+    localStorage.setItem(LS_KEY, JSON.stringify(s));
+  }catch(_){}
+}, true);
+window.addEventListener("unhandledrejection", function(e){
+  try{
+    var s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    s.__err = s.__err || [];
+    s.__err.push({m: "promise: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)), t: Date.now()});
+    if(s.__err.length > 20) s.__err = s.__err.slice(-20);
+    localStorage.setItem(LS_KEY, JSON.stringify(s));
+  }catch(_){}
+});
 /* ================= 基础 ================= */
 var $ = function(id){ return document.getElementById(id); };
 var LS_KEY = "couple_checkin_v1";
@@ -618,6 +649,9 @@ function render(){
   // 单日清单：只显示自己的项目 + 共同项目（同房）
   var myKey = (me==="wife") ? "w" : "h";
   var otherKey = (me==="wife") ? "h" : "w";
+  if(!state.items.length){
+    $("dayList").innerHTML = "<div class='empty-tips'>还没有打卡项目<br>点右下角 ⚙ 添加，或等另一半同步过来</div>";
+  } else {
   var html = "";
   for(var r=0; r<state.items.length; r++){
     var it = state.items[r];
@@ -636,6 +670,7 @@ function render(){
       "<div class='dbox'>"+box+"</div></div>";
   }
   $("dayList").innerHTML = html;
+  }
   renderStats(ds, locked);
   renderTrend();
   renderLocalHint();
@@ -846,6 +881,7 @@ async function pullSilent(){
     if(curTab==="log") renderLog();
     if(curTab==="chat") renderChat();
     if(curTab==="moments") renderMoments();
+    maybeAutoReply();
     if(grew || hadPending){ setTimeout(function(){ push(true); }, 200); }
   }catch(e){
     setDot("err"); toastMsg("同步失败，先用本地数据（联网后自动重试）");
@@ -933,6 +969,7 @@ function renderSettings(){
   var n = state.config.notify || {};
   $("pushH").value = (n.husband && n.husband.pushToken) || "";
   $("pushW").value = (n.wife && n.wife.pushToken) || "";
+  $("autoReplyChk").checked = state.config.autoReply !== false;
   // 身份互斥：另一台手机已占用的身份打上标记
   var dev = state.devices || {};
   var myId = state.config.deviceId;
@@ -1007,8 +1044,11 @@ $("dayList").onclick = function(e){
   toggle(row.getAttribute("data-d"), row.getAttribute("data-i"));
 };
 $("syncFab").onclick = function(){
-  toastMsg("正在同步更新…");
-  setTimeout(function(){ location.reload(); }, 350);
+  if(!hasCfg()){ toastMsg("先在⚙设置里连上云同步"); return; }
+  toastMsg("正在同步…");
+  pullSilent().then(function(){
+    setTimeout(function(){ push(true); }, 150);
+  });
 };
 $("fab").onclick = function(){ openSheet("setSheet"); };
 $("setClose").onclick = function(){ closeSheet("setSheet"); };
@@ -1063,6 +1103,12 @@ document.querySelectorAll("#setSheet .idopt").forEach(function(el){
     if(takenByOther){ toastMsg("身份已转移到这台手机"); }
   };
 });
+
+$("autoReplyChk").onchange = function(){
+  state.config.autoReply = this.checked;
+  save();
+  toastMsg(this.checked ? "自动回复已开启，漫漫发消息我会替你甜甜地回~" : "自动回复已关闭");
+};
 
 $("qualLineIn").onchange = function(){
   var v = parseInt(this.value, 10);
@@ -1408,10 +1454,11 @@ async function pullChat(){
     if(!r.ok) return;
     var remote = JSON.parse(await r.text());
     var merged = mergeById(state.chat||[], remote.chat||[], 400);
-    var oldTxt = JSON.stringify((state.chat||[]).map(function(m){return m.id;}));
-    if(JSON.stringify(merged.map(function(m){return m.id;})) !== oldTxt){
+    var oldIds = JSON.stringify((state.chat||[]).map(function(m){return m.id;}));
+    if(JSON.stringify(merged.map(function(m){return m.id;})) !== oldIds){
       state.chat = merged; save();
       if(curTab==="chat") renderChat();
+      maybeAutoReply();
     }
   }catch(e){}
 }
@@ -1512,6 +1559,59 @@ $("momList").onclick = function(e){
   state.moments = (state.moments||[]).filter(function(m){ return m.id!==id; });
   save(); schedulePush(true); renderMoments();
 };
+
+/* ================= 自动回复（宏宏手机专属） ================= */
+var AUTO_REPLIES = {
+  miss:   ["刚刚还在想你呢，小馋猫", "嘿嘿，咱们想到一块儿啦", "想你啦，大大的抱抱~", "也超想你，特别的想"],
+  tired:  ["抱抱漫漫，辛苦啦~", "漫漫最辛苦啦，心疼你", "回家给你捶捶背捏捏肩"],
+  eat:    ["要好好吃饭呀，小馋猫", "多吃一点点，乖乖的哦~", "嗯嗯，也想尝尝你吃的"],
+  good:   ["漫漫最棒啦，好厉害呀", "给你点个大大的赞~", "嘿嘿，就知道漫漫最行"],
+  night:  ["晚安啦，梦里也要有我哦", "乖乖睡，明天美美的~", "晚安漫漫，做个甜甜的梦"],
+  morning:["早安漫漫，今天也想你", "早早起，元气满满的哦~", "早安呀，被子要盖盖好"],
+  hi:     ["嗯嗯，我在呢，漫漫说~", "在呢在呢，正想着你呢", "嘿嘿，被你猜中啦~", "漫漫说什么都对~"],
+  love:   ["也爱你呀，超爱超爱那种", "嘿嘿，脸都红透了~", "爱你哟，我的漫漫"],
+  default:["嗯嗯，漫漫说得对~", "嘿嘿，都听漫漫的~", "漫漫开心，我就开心", "好呀好呀，全听你的~", "嘿嘿，漫漫最好啦", "漫漫慢慢说，我听着呢"]
+};
+function pickAutoReply(text){
+  var t = text || "";
+  var hour = new Date().getHours();
+  var pool;
+  if(/晚安|睡觉|困了|去睡/.test(t)) pool = AUTO_REPLIES.night;
+  else if(/早安|起床|醒了/.test(t) || hour < 7) pool = AUTO_REPLIES.morning;
+  else if(/想你|爱你|喜欢|亲亲|抱抱/.test(t)) pool = AUTO_REPLIES.love;
+  else if(/累|辛苦|难受|加班|烦/.test(t)) pool = AUTO_REPLIES.tired;
+  else if(/吃|饭|外卖|饿|奶茶/.test(t)) pool = AUTO_REPLIES.eat;
+  else if(/棒|厉害|开心|高兴|成功|完成/.test(t)) pool = AUTO_REPLIES.good;
+  else if(/在吗|干嘛|忙吗|你好/.test(t) || /[?？]\s*$/.test(t)) pool = AUTO_REPLIES.hi;
+  else pool = AUTO_REPLIES.default;
+  var recent = (state.config.autoReplyRecent || []).slice(-2);
+  var cands = pool.filter(function(x){ return recent.indexOf(x) < 0; });
+  var pick = cands.length ? cands[Math.floor(Math.random()*cands.length)] : pool[Math.floor(Math.random()*pool.length)];
+  state.config.autoReplyRecent = (state.config.autoReplyRecent || []).concat([pick]).slice(-3);
+  save();
+  return pick;
+}
+/* 时机：漫漫最后一条消息未回复 + 已过 2 分钟 + 不超过 2 小时 */
+function maybeAutoReply(){
+  if(state.config.autoReply === false) return;
+  if((state.config.me || "husband") !== "husband") return; // 只在宏宏的手机生效
+  var chat = state.chat || [];
+  if(!chat.length) return;
+  var last = chat[chat.length-1];
+  if(last.who !== "wife") return; // 最后一条是自己的（或已回复过），不回
+  var age = Date.now() - last.t;
+  if(age < 120000 || age > 7200000) return; // 2~3 分钟感 + 太旧不回
+  var reply = {
+    id: "m"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    t: Date.now(), who: "husband", auto: true,
+    text: pickAutoReply(last.text)
+  };
+  state.chat.push(reply);
+  if(state.chat.length > 400) state.chat = state.chat.slice(-400);
+  save();
+  if(curTab === "chat") renderChat();
+  schedulePush(true);
+}
 
 /* ================= 启动 ================= */
 if(!state.config.me){ $("setup").classList.add("show"); }
